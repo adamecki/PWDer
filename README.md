@@ -60,7 +60,7 @@ title_n
 username_n
 password_n
 ```
-- This won't be possible once encrypted password importing will be implemented. Make sure `\n` is being used (and not `\r\n`) (look up CR LF if you don't know what is it about).
+- This won't be possible once encrypted password importing will be implemented. Make sure `\n` (LF) is being used (and not `\r\n` (CR LF)).
 # Usage
 ## Main screen
 This is where you can select a password to enter.
