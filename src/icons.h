@@ -11,6 +11,7 @@ extern const uint8_t loudspeaker[];
 extern const uint8_t battery[];
 extern const uint8_t options[];
 extern const uint8_t padlock[];
+extern const uint8_t search[];
 extern const uint8_t error[];
 extern const uint8_t help[];
 extern const uint8_t key[];

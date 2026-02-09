@@ -37,6 +37,7 @@ int device_mode = 1;
 // 4 - sync page
 // 5 - credits page
 // 6 - file import page
+// 7 - search
 bool device_muted;
 
 int mode0_inputtype;
@@ -76,6 +77,12 @@ int mode5_page = 0;
 const String mode5_interactive_hyperlink = "https://github.com/adamecki/PWDer";
 const String mode5_interactive_hyperlink2 = "https://floriano.uk";
 const String mode5_interactive_hyperlink3 = "https://github.com/josephpal/esp32-Encrypt";
+
+String mode7_query = "";
+int mode7_contains_searched_string[100];
+int mode7_index = 0;
+int mode7_matches = 0;
+bool mode7_show_results = false;
 
 String title[100];
 String username[100];
@@ -681,6 +688,67 @@ void drawUI() {
       // push
       canvas.pushSprite(0, 0);
       break;
+
+    case 7:
+      // icons
+      pushIcon(search, 4, 4);
+      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      if(device_muted) {
+        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+      } else {
+        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+      }
+
+      // captions
+      canvas.setTextColor(WHITE);
+      canvas.setTextDatum(middle_right);
+      if(mode7_show_results) {
+        canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
+        canvas.setTextDatum(middle_left);
+        canvas.drawString(mode7_query, 40, 20);
+      } else {
+        canvas.setTextDatum(middle_left);
+        canvas.drawString("Search", 40, 20);
+      }
+      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
+
+      // content
+      canvas.setTextColor(BLACK);
+      if(mode7_show_results) {
+        if(M5Cardputer.Keyboard.isKeyPressed('v') && mode7_matches > 0) {
+          canvas.setTextDatum(top_center);
+          canvas.drawString(username[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
+          canvas.setTextDatum(bottom_center);
+          canvas.drawString(password[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+        } else {
+          if(mode7_matches > 0) {
+            canvas.setTextDatum(top_center);
+            canvas.drawString(title[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
+          }
+          canvas.setTextDatum(bottom_center);
+          if(mode7_matches == 0) {
+            canvas.setTextDatum(middle_center);
+            canvas.drawString("No results", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
+          } else if(mode7_matches == 1) {
+            canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          } else {
+            if(mode7_index == 0) {
+              canvas.drawString("[ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            } else if (mode7_index == mode7_matches - 1) {
+              canvas.drawString("< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            } else {
+              canvas.drawString("< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            }
+          }
+        }
+      } else {
+        canvas.setTextDatum(middle_center);
+        canvas.drawString(mode7_query + "_", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
+      }
+
+      // push
+      canvas.pushSprite(0, 0);
+      break;
       
     default:
       break;
@@ -929,7 +997,7 @@ void loop() {
   M5Cardputer.update();
 
   if(M5Cardputer.Keyboard.isChange()) {
-    if(mode0_wasVPressed && device_mode == 0) {
+    if(mode0_wasVPressed && (device_mode == 0 || device_mode == 7)) {
       mode0_wasVPressed = false;
       drawUI();
     }
@@ -952,6 +1020,9 @@ void loop() {
             } else {
               save_spkstate("0");
             }
+            drawUI();
+          } else if (M5Cardputer.Keyboard.isKeyPressed('q')) { // search (query)
+            device_mode = 7;
             drawUI();
           } else if (M5Cardputer.Keyboard.isKeyPressed('h')) { // help
             device_mode = 2;
@@ -1314,6 +1385,148 @@ void loop() {
             SD.remove(IMPORT_FILE_PATH);
             device_mode = 0;
             drawUI();
+          }
+          break;
+
+        case 7:
+          if(mode7_show_results) {
+            if (M5Cardputer.Keyboard.isKeyPressed('/') && mode7_index < mode7_matches - 1) { // next password
+              mode7_index++;
+              drawUI();
+            } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode7_index > 0) { // previous password
+              mode7_index--;
+              drawUI();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('`')) {
+              mode7_matches = 0;
+              mode7_index = 0;
+              mode7_show_results = false;
+              drawUI();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('l')) {
+              device_mode = 1;
+              drawUI();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('m')) {
+              device_muted = !device_muted;
+              if(!device_muted){
+                save_spkstate("1");
+              } else {
+                save_spkstate("0");
+              }
+              drawUI();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
+              Keyboard.press(KEY_TAB);
+              delay(25);
+              Keyboard.releaseAll();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('r')) { // press RETURN on a computer
+              Keyboard.press(KEY_RETURN);
+              delay(25);
+              Keyboard.releaseAll();
+            } else if(M5Cardputer.Keyboard.isKeyPressed('v')) {
+              drawUI();
+              mode0_wasVPressed = true;
+            } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
+              if(mode0_inputtype == 0 || mode0_inputtype == 2) {
+                for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                  Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+                  delay(25);
+                  Keyboard.releaseAll();
+                  delay(25);
+                }
+              }
+  
+              if(mode0_inputtype == 2) {
+                Keyboard.press(KEY_TAB);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);
+              }
+  
+              if(mode0_inputtype == 1 || mode0_inputtype == 2) {
+                for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                  Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+                  delay(25);
+                  Keyboard.releaseAll();
+                  delay(25);
+                }
+              }
+  
+              if(mode0_inputtype == 2) {
+                Keyboard.press(KEY_RETURN);
+                delay(25);
+                Keyboard.releaseAll();
+              }
+            } else if (M5Cardputer.Keyboard.isKeyPressed('1')) { // enter username
+              for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);
+              }
+            } else if (M5Cardputer.Keyboard.isKeyPressed('2')) { // enter password
+              for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);
+              }
+            } else if (M5Cardputer.Keyboard.isKeyPressed('3')) { // enter all
+              for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);
+              }
+  
+              Keyboard.press(KEY_TAB);
+              delay(25);
+              Keyboard.releaseAll();
+              delay(25);
+  
+              for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
+                Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);
+              }
+  
+              Keyboard.press(KEY_RETURN);
+              delay(25);
+              Keyboard.releaseAll();
+            }
+          } else {
+            if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
+              device_mode = 0;
+              drawUI();
+            } else {
+              for(auto i : status.word) {
+                mode7_query += i;
+                drawUI();
+              }
+    
+              if(status.del) {
+                mode7_query.remove(mode7_query.length() - 1);
+                drawUI();
+              }
+    
+              if(status.enter) {
+                if(mode7_query != "") {
+                  String lowercase_query = mode7_query;
+                  lowercase_query.toLowerCase();
+                    
+                  for(int i = 0; i < mode0_max; i++) {
+                    String lowercase_title = title[i];
+                    lowercase_title.toLowerCase();
+
+                    if(lowercase_title.indexOf(lowercase_query) != -1) {
+                      mode7_contains_searched_string[mode7_matches] = i;
+                      mode7_matches++;
+                    }
+                  }
+                  
+                  mode7_show_results = true;
+                  drawUI();
+                }
+              }
+            }
           }
           break;
           
