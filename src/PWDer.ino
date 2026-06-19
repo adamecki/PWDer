@@ -4,12 +4,18 @@
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include <WiFi.h>
+#include "TOTP.h"
+#include "Base32-Decode.h"
+#include <NTPClient.h>
 #include "Cipher.h"
 #include "enckey.h"
 #include "icons.h"
 
 M5Canvas canvas(&M5Cardputer.Display);
 USBHIDKeyboard Keyboard;
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP); // change to modifiable ntp server later
 
 #define SD_CS_PIN 12
 #define SD_MOSI_PIN 14
@@ -22,11 +28,20 @@ USBHIDKeyboard Keyboard;
 #define SECRET_FILE_PATH "/pwder/secret"
 #define IMPORT_FILE_PATH "/pwimport"
 
+#define WIFI_TIMEOUT_SECONDS 5 // Increase this value if your Wi-Fi takes longer to connect with
+// set to 0 if you don't plan to use Wi-Fi and don't want your device to lag for 5 seconds every start
+// in the future I'll make an option to disable wi-fi
+
 // variables with no value will be imported from files
 String wifissid;
 String wifipswd;
 String hostname;
 String httpport;
+
+// totp state variables
+bool totp_available = false;
+bool network_available = false;
+char totp_buffer[7];
 
 int device_mode = 1;
 // "Device mode" determines what does drawUI() function draw and how does the device react to key presses in loop()
@@ -74,9 +89,13 @@ int mode4_page = 0;
 // 6 - file error
 
 int mode5_page = 0;
-const String mode5_interactive_hyperlink = "https://github.com/adamecki/PWDer";
-const String mode5_interactive_hyperlink2 = "https://floriano.uk";
-const String mode5_interactive_hyperlink3 = "https://github.com/josephpal/esp32-Encrypt";
+const String mode5_interactive_hyperlinks[5] = {
+  "https://github.com/adamecki/PWDer",
+  "https://floriano.uk",
+  "https://github.com/josephpal/esp32-Encrypt",
+  "https://github.com/lucadentella/TOTP-Arduino",
+  "https://github.com/dirkx/Arduino-Base32-Decode"
+};
 
 String mode7_query = "";
 int mode7_contains_searched_string[100];
@@ -87,8 +106,19 @@ bool mode7_show_results = false;
 String title[100];
 String username[100];
 String password[100];
+String totp_secret[100];
 
 Cipher* cipher = new Cipher();
+
+void generate_totp(String secret) {
+  if(totp_available && network_available) {
+    timeClient.update();
+    uint8_t decoded[32];
+    int keyLen = base32decode(secret.c_str(), decoded, sizeof(decoded));
+    TOTP totp = TOTP(decoded, keyLen);
+    strncpy(totp_buffer, totp.getCode(timeClient.getEpochTime()), sizeof(totp_buffer));
+  }
+}
 
 void pushIcon(const uint8_t bitmap[], int xoffset = 0, int yoffset = 0, int scale = 1) {
   // There is a scale feature I implemented, however it's not used at all.
@@ -153,7 +183,6 @@ void importPasswordsFromFile() {
       break;
     } else {
       String import_line = import_file.readStringUntil('\n');
-      // import_line.remove(import_line.length() - 1); // this is in case \r\n is used (but it looks like it isn't)
       import_string += import_line + "\n";
       switch(swcase) {
         case 0:
@@ -166,6 +195,10 @@ void importPasswordsFromFile() {
           break;
         case 2:
           password[mode0_max] = import_line;
+          swcase = 3;
+          break;
+        case 3:
+          totp_secret[mode0_max] = import_line;
           swcase = 0;
           mode0_max++;
           break;
@@ -208,21 +241,43 @@ void readResponse(NetworkClient* client, String &lines) {
   }
 }
 
-void importPasswordsFromNetwork() {
-  const char* ssid = wifissid.c_str();
-  const char* wpwd = wifipswd.c_str();
-  const char* host = hostname.c_str();
-  const int   port = httpport.toInt();
+void retry_connection() {
+  WiFi.begin(wifissid, wifipswd);
 
-  String import_string = "";
-
-  WiFi.begin(ssid, wpwd);
-  int wifi_connection_timeout = 0; // max - 20 (10s timeout)
+  int timeout_500ms = 0;
+  
   while(WiFi.status() != WL_CONNECTED) {
     delay(500);
-    wifi_connection_timeout++;
-    if(wifi_connection_timeout > 19) {
-      mode4_page = 4;
+    timeout_500ms++;
+    if (timeout_500ms >= (2 * WIFI_TIMEOUT_SECONDS)) {
+      break;
+    }
+  }
+
+  network_available = false;
+
+  if(timeout_500ms < (2 * WIFI_TIMEOUT_SECONDS)) {
+    network_available = true;
+    timeClient.begin();  
+  }
+}
+
+void importPasswordsFromNetwork() {
+  if(network_available) {
+    const char* host = hostname.c_str();
+    const int   port = httpport.toInt();
+  
+    String import_string = "";
+  
+    mode4_page = 1;
+    drawUI();
+  
+    NetworkClient client;
+    String footer = String(" HTTP/1.1\r\n") + "Host: " + String(host) + "\r\n" + "Connection: close\r\n\r\n";
+    String readRequest = "GET /" + footer;
+  
+    if(!client.connect(host, port)) {
+      mode4_page = 5;
       drawUI();
       delay(3000);
       mode4_page = 0;
@@ -230,74 +285,65 @@ void importPasswordsFromNetwork() {
       drawUI();
       return;
     }
-  }
-
-  mode4_page = 1;
-  drawUI();
-
-  NetworkClient client;
-  String footer = String(" HTTP/1.1\r\n") + "Host: " + String(host) + "\r\n" + "Connection: close\r\n\r\n";
-  String readRequest = "GET /" + footer;
-
-  if(!client.connect(host, port)) {
-    mode4_page = 5;
+  
+    mode4_page = 2;
+    drawUI();
+    
+    client.print(readRequest);
+    readResponse(&client, import_string);
+  
+    if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
+  
+    File import_file = SD.open(IMPORT_FILE_PATH, FILE_WRITE);
+  
+    int lines_read = 0;
+    int start = 0;
+    while(true) {
+      int end = import_string.indexOf('\n', start);
+      if (end == -1) {
+        String line = import_string.substring(start);
+        import_file.print(line + String('\n'));
+        break;
+      }
+  
+      String line = import_string.substring(start, end);
+      start = end + 1;
+      if(lines_read > 4) {
+        import_file.print(line + String('\n'));
+      }
+  
+      lines_read++;
+    }
+  
+    import_file.close();
+    
+    if(lines_read > 7) {
+      mode4_page = 3;
+      drawUI();
+      delay(3000);
+      
+      mode4_page = 0;
+      device_mode = 6;
+      drawUI();
+    } else {
+      if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
+      
+      mode4_page = 6;
+      drawUI();
+      delay(3000);
+  
+      mode4_page = 0;
+      device_mode = 0;
+      drawUI();
+    }
+  } else {
+    mode4_page = 4;
     drawUI();
     delay(3000);
     mode4_page = 0;
     device_mode = 0;
     drawUI();
     return;
-  }
-
-  mode4_page = 2;
-  drawUI();
-  
-  client.print(readRequest);
-  readResponse(&client, import_string);
-
-  if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
-
-  File import_file = SD.open(IMPORT_FILE_PATH, FILE_WRITE);
-
-  int lines_read = 0;
-  int start = 0;
-  while(true) {
-    int end = import_string.indexOf('\n', start);
-    if (end == -1) {
-      String line = import_string.substring(start);
-      import_file.print(line + String('\n'));
-      break;
-    }
-
-    String line = import_string.substring(start, end);
-    start = end + 1;
-    if(lines_read > 4) {
-      import_file.print(line + String('\n'));
-    }
-
-    lines_read++;
-  }
-
-  import_file.close();
-  
-  if(lines_read > 7) {
-    mode4_page = 3;
-    drawUI();
-    delay(3000);
-    
-    mode4_page = 0;
-    device_mode = 6;
-    drawUI();
-  } else {
-    if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
-    
-    mode4_page = 6;
-    drawUI();
-    delay(3000);
-
-    mode4_page = 0;
-    device_mode = 0;
-    drawUI();
   }
 }
 
@@ -334,7 +380,13 @@ void drawUI() {
       canvas.setTextColor(BLACK);
       if(M5Cardputer.Keyboard.isKeyPressed('v')) {
         canvas.setTextDatum(top_center);
-        canvas.drawString(username[mode0_selection], M5Cardputer.Display.width() / 2, 50);
+        if (network_available && totp_available) {
+          generate_totp(totp_secret[mode0_selection]);
+          canvas.drawString(username[mode0_selection] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
+          totp_buffer[6] = '\0';
+        } else {
+          canvas.drawString(username[mode0_selection], M5Cardputer.Display.width() / 2, 50);
+        }
         canvas.setTextDatum(bottom_center);
         canvas.drawString(password[mode0_selection], M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
       } else {
@@ -342,14 +394,24 @@ void drawUI() {
         canvas.drawString(title[mode0_selection], M5Cardputer.Display.width() / 2, 50);
         canvas.setTextDatum(bottom_center);
         if(mode0_max == 1) {
-          canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-        } else {
-          if(mode0_selection == 0) {
-            canvas.drawString("[ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          } else if (mode0_selection == mode0_max - 1) {
-            canvas.drawString("< [ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          if(network_available && totp_available) {
+            canvas.drawString("[ 1 / 1 ] (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           } else {
-            canvas.drawString("< [ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          }
+        } else {
+          String enumerator;
+          if(mode0_selection == 0) {
+            enumerator = "[ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >";
+          } else if (mode0_selection == mode0_max - 1) {
+            enumerator = "< [ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ]";
+          } else {
+            enumerator = "< [ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >";
+          }
+          if(network_available && totp_available) {
+            canvas.drawString(enumerator + " (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          } else {
+            canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           }
         }
       }
@@ -636,7 +698,13 @@ void drawUI() {
           canvas.drawString("< Visit my website! >", M5Cardputer.Display.width() / 2, 50);
           break;
         case 2:
-          canvas.drawString("< Thx for an AES128 library <3", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString("< Thx for an AES128 library <3 >", M5Cardputer.Display.width() / 2, 50);
+          break;
+        case 3:
+          canvas.drawString("< Thx for a TOTP library <3 >", M5Cardputer.Display.width() / 2, 50);
+          break;
+        case 4:
+          canvas.drawString("< Thx for a Base32 library <3", M5Cardputer.Display.width() / 2, 50);
           break;
         default:
           break;
@@ -652,6 +720,12 @@ void drawUI() {
           break;
         case 2:
           canvas.drawString("josephpal/esp32-Encrypt on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          break;
+        case 3:
+          canvas.drawString("lucadentella/TOTP-Arduino on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          break;
+        case 4:
+          canvas.drawString("dirkx/Arduino-Base32-Decode on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
@@ -717,7 +791,13 @@ void drawUI() {
       if(mode7_show_results) {
         if(M5Cardputer.Keyboard.isKeyPressed('v') && mode7_matches > 0) {
           canvas.setTextDatum(top_center);
-          canvas.drawString(username[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
+          if (network_available && totp_available) {
+            generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
+            canvas.drawString(username[mode7_contains_searched_string[mode7_index]] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
+            totp_buffer[6] = '\0';
+          } else {
+            canvas.drawString(username[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
+          }
           canvas.setTextDatum(bottom_center);
           canvas.drawString(password[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
         } else {
@@ -730,14 +810,24 @@ void drawUI() {
             canvas.setTextDatum(middle_center);
             canvas.drawString("No results", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
           } else if(mode7_matches == 1) {
-            canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          } else {
-            if(mode7_index == 0) {
-              canvas.drawString("[ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-            } else if (mode7_index == mode7_matches - 1) {
-              canvas.drawString("< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            if(network_available && totp_available) {
+              canvas.drawString("[ 1 / 1 ] (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
             } else {
-              canvas.drawString("< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+              canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            }
+          } else {
+            String enumerator;
+            if(mode7_index == 0) {
+              enumerator = "[ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >";
+            } else if (mode7_index == mode7_matches - 1) {
+              enumerator = "< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ]";
+            } else {
+              enumerator = "< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >";
+            }
+            if(network_available && totp_available) {
+              canvas.drawString(enumerator + " (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+            } else {
+              canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
             }
           }
         }
@@ -918,6 +1008,13 @@ void setup() {
             if(password[mode0_max][password[mode0_max].length() - 1] == '\r') {
               password[mode0_max].remove(password[mode0_max].length() - 1);
             }
+            swcase = 3;
+            break;
+          case 3:
+            totp_secret[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            if(totp_secret[mode0_max][totp_secret[mode0_max].length() - 1] == '\r') {
+              totp_secret[mode0_max].remove(totp_secret[mode0_max].length() - 1);
+            }
             mode0_max++;
             swcase = 0;
             break;
@@ -950,6 +1047,13 @@ void setup() {
             password[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
             if(password[mode0_max][password[mode0_max].length() - 1] == '\r') {
               password[mode0_max].remove(password[mode0_max].length() - 1);
+            }
+            swcase = 3;
+            break;
+          case 3:
+            totp_secret[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            if(totp_secret[mode0_max][totp_secret[mode0_max].length() - 1] == '\r') {
+              totp_secret[mode0_max].remove(totp_secret[mode0_max].length() - 1);
             }
             mode0_max++;
             swcase = 0;
@@ -988,6 +1092,12 @@ void setup() {
   // Start keyboard
   Keyboard.begin();
   USB.begin();
+
+  // start Wi-Fi connection
+  retry_connection();
+  
+  // check for first TOTP
+  if(totp_secret[mode0_selection] != "") {totp_available = true;}
 
   drawUI();
 }
@@ -1037,6 +1147,8 @@ void loop() {
           } else if (M5Cardputer.Keyboard.isKeyPressed('o')) { // options
             device_mode = 3;
             drawUI();
+//          } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {/ // retry connecting to Wi-Fi (future, now restart needed)
+//            retry_connection();/
           } else if (M5Cardputer.Keyboard.isKeyPressed('l')) { // lock
             device_mode = 1;
             drawUI();
@@ -1108,6 +1220,17 @@ void loop() {
             Keyboard.press(KEY_RETURN);
             delay(25);
             Keyboard.releaseAll();
+          } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
+            if(network_available && totp_available) {
+              generate_totp(totp_secret[mode0_selection]);
+              for(int i = 0; i < 6; i++) {
+                Keyboard.press(totp_buffer[i]);
+                delay(25);
+                Keyboard.releaseAll();
+                delay(25);  
+              }
+              totp_buffer[6] = '\0';
+            }
           } else if (M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
             Keyboard.press(KEY_TAB);
             delay(25);
@@ -1118,9 +1241,11 @@ void loop() {
             Keyboard.releaseAll();
           } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode0_selection < mode0_max - 1) { // next password
             mode0_selection++;
+            if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
             drawUI();
           } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode0_selection > 0) { // previous password
             mode0_selection--;
+            if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
             drawUI();
           } else if (M5Cardputer.Keyboard.isKeyPressed('v')) {
             drawUI();
@@ -1331,38 +1456,16 @@ void loop() {
             device_mode = 0;
             drawUI(); 
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
-            switch(mode5_page) {
-              case 0:
-                for (int i = 0; i < mode5_interactive_hyperlink.length(); i++) {
-                  Keyboard.press(mode5_interactive_hyperlink[i]);
-                  delay(25);
-                  Keyboard.releaseAll();
-                  delay(25);
-                }
-                break;
-              case 1:
-                for (int i = 0; i < mode5_interactive_hyperlink2.length(); i++) {
-                  Keyboard.press(mode5_interactive_hyperlink2[i]);
-                  delay(25);
-                  Keyboard.releaseAll();
-                  delay(25);
-                }
-                break;
-              case 2:
-                for (int i = 0; i < mode5_interactive_hyperlink3.length(); i++) {
-                  Keyboard.press(mode5_interactive_hyperlink3[i]);
-                  delay(25);
-                  Keyboard.releaseAll();
-                  delay(25);
-                }
-                break;
-              default:
-                break;
+            for (int i = 0; i < mode5_interactive_hyperlinks[mode5_page].length(); i++) {
+              Keyboard.press(mode5_interactive_hyperlinks[mode5_page][i]);
+              delay(25);
+              Keyboard.releaseAll();
+              delay(25);  
             }
-          } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 2) { // next password
+          } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 4) { // next page
             mode5_page++;
             drawUI();
-          } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode5_page > 0) { // previous password
+          } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode5_page > 0) { // previous page
             mode5_page--;
             drawUI();
           }
@@ -1392,9 +1495,11 @@ void loop() {
           if(mode7_show_results) {
             if (M5Cardputer.Keyboard.isKeyPressed('/') && mode7_index < mode7_matches - 1) { // next password
               mode7_index++;
+              if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
               drawUI();
             } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode7_index > 0) { // previous password
               mode7_index--;
+              if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
               drawUI();
             } else if(M5Cardputer.Keyboard.isKeyPressed('`')) {
               mode7_matches = 0;
@@ -1491,10 +1596,22 @@ void loop() {
               Keyboard.press(KEY_RETURN);
               delay(25);
               Keyboard.releaseAll();
+            } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
+              if(network_available && totp_available) {
+                generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
+                for(int i = 0; i < 6; i++) {
+                  Keyboard.press(totp_buffer[i]);
+                  delay(25);
+                  Keyboard.releaseAll();
+                  delay(25);  
+                }
+                totp_buffer[6] = '\0';
+              }
             }
           } else {
             if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
               device_mode = 0;
+              if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
               drawUI();
             } else {
               for(auto i : status.word) {
@@ -1523,6 +1640,7 @@ void loop() {
                   }
                   
                   mode7_show_results = true;
+                  if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
                   drawUI();
                 }
               }

@@ -6,6 +6,18 @@ import sys
 import os
 import socket
 
+def smartSubstring(prefix, suffix, value):
+    if not value:
+        return None
+    
+    start = value.find(prefix)
+    if start == -1:
+        return None
+    start += len(prefix)
+    end = value.find(suffix, start)
+
+    return value[start:] if end == -1 else value[start:end]
+
 def getLocalIP():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("1.1.1.1", 80))
@@ -46,9 +58,12 @@ else:
                         pwdstring += '\n'
                     # Max 100 passwords
                     if i < 100:
-                        pwdstring += entry.title + '\n'
-                        pwdstring += entry.username + '\n'
-                        pwdstring += entry.password
+                        pwdstring += f'{entry.title}\n'
+                        pwdstring += f'{entry.username}\n'
+                        pwdstring += f'{entry.password}\n'
+                        otp = smartSubstring("secret=", "&", f'{entry.otp}')
+                        if otp:
+                            pwdstring += otp
                     i += 1
                 if(len(sys.argv) > 2 and sys.argv[2] == '--genfile'):
                     print('Creating a file...')

@@ -3,6 +3,7 @@ PWDer is a simple password manager for the M5Cardputer. Its name is a combinatio
 - PWD (password)
 - Manager
 - Cardputer
+
 and in order to not break your tongue, you can pronounce it as "Powder".
 
 <img src="./photos/main.webp" alt="main" width="40%">
@@ -14,7 +15,8 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Searching for passwords by entry name
 - Automatic password input to your computer using USB cable
 - Synchronizing with .kdbx (KeePass) files over network\* or via SD card
-- Elegant, simple design
+- Support for TOTP two-factor authentication
+- Fun, simple design
 
 \* Network transfer is not yet encrypted - its usage is highly discouraged unless you're the only user of your local network. Synchronize at your own risk.
 # Setting it up
@@ -27,7 +29,7 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Set up an Arduino IDE for [programming the Cardputer](https://docs.m5stack.com/en/arduino/m5cardputer/program)
 - Download the source code and open the `PWDer.ino` file with Arduino IDE
 - Open up `enckey.cpp` and set the value of `char* enckey` to a set of 16 random lowercase letters
-- Flash the program into the Cardputer or Export Compiled Program (if you're going to use Launcher) by pressing Ctrl+Alt+S
+- Flash the program onto the Cardputer or Export Compiled Program (if you're going to use Launcher) by pressing Ctrl+Alt+S
 - *Optional: If you chose the second option, move the exported .bin file to the SD card*
 - Make sure the SD card is in, then turn on the Cardputer
 ## Step 3: First run
@@ -54,12 +56,15 @@ python3 main.py /your/database.kdbx --genfile
 title_1
 username_1
 password_1
+otp_secret_1 (or empty if you don't have / don't want to use OTP)
 title_2
 username_2
 password_2
+otp_secret_2 (or empty)
 title_n
 username_n
 password_n
+otp_secret_n (or empty)
 ```
 - This won't be possible once encrypted password importing will be implemented. Make sure `\n` (LF) is being used (and not `\r\n` (CR LF)).
 # Usage
@@ -69,18 +74,39 @@ This is where you can select a password to enter.
 <img src="./photos/main.webp" alt="main" width="40%">
 
 Press the arrow keys to navigate, and hold down V to preview the username and password you're about to enter. Connect the Cardputer to your computer and do one of these things:
-- Pressing 1 will enter the username for currently selected entry
-- Pressing 2 will enter the password
-- Pressing 3 will enter the username, then press TAB, then enter the password, and then press Enter
-- Pressing Enter will perform one of these three actions, depending on the selection made in Options.
-- Pressing T will simulate pressing TAB on the computer.
-- Pressing R will simulate pressing Enter on the computer.
-- Pressing M will mute or unmute the speaker. The default state for the speaker is muted.
-- Pressing L will lock the device. Alternatively, you can just reset the device.
-- Pressing S will attempt to synchronize the passwords over the network.
-- Pressing O will open Options.
-- Pressing C will open Credits.
-- Pressing Q will open Search menu (press Fn+Esc to exit)
+- `1` - enter the username for currently selected entry
+- `2` - enter the password
+- `3` - enter the username, then press TAB, then enter the password, and then press Enter
+- `4` - enter current TOTP
+- `Enter` - perform one of these three actions, depending on the selection made in Options.
+- `V` - hold to preview username, password and TOTP
+- `T` - simulate pressing TAB on the computer.
+- `R` - simulate pressing Enter on the computer.
+- `M` - mute or unmute the speaker. The default state for the speaker is muted.
+- `L` - lock the device. Alternatively, you can just reset the device.
+- `S` - attempt to synchronize the passwords over the network.
+- `O` - open Options.
+- `C` - open Credits.
+- `Q` - open Search menu (press Fn+Esc to exit)
+
+## TOTP
+### Introduction
+PWDer now supports two-factor authentication using six-digit one time password.
+
+Neither ESP32, nor Cardputer do have an RTC backup battery, so the Cardputer needs to connect to the Internet via Wi-Fi to synchronize time, so it can generate an OTP for you. For now, the default pool.ntp.org NTP server for the NTP client library is used, but I'm planning to implement both [M5Stack RTC Unit](https://docs.m5stack.com/en/unit/UNIT%20RTC) support and the option to change an NTP server.
+
+With that said, even if you have an OTP in your database, PWDer won't show it if it's unable to synchronize time via NTP.
+
+### How does it work?
+<img src="./photos/kptotp.png" alt="KeePass TOTP settings for an entry" width="40%">
+KeePass supports TOTP. If a secret key for your entry is set, the Python script provided will find it and place it in your import file for PWDer. Just like passwords, it is stored on the SD card in an encrypted form (excluding the import phase for now).
+
+Otherwise, if you're writing an import file manually, you can add the secret key as the fourth line of each entry, as described earlier.
+
+### Where do I find it?
+<img src="./photos/totpishere.webp" alt="TOTP is here" width="40%">
+If the NTP requirements are met and your entry has a TOTP secret set, you will see a "(TOTP)" sign at the bottom row of an entry. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
+
 ## Lock screen
 Here you have to enter the correct password (then press OK) to access the device. If you've locked yourself out, you can remove the `pwder/config` file from the SD card (the password will be "default" again), but keep in mind that all your saved passwords and configuration will disappear!
 
@@ -146,4 +172,6 @@ In future versions, I plan to include these features:
 - Encrypted password importing and synchronizing over network
 - Encryption key stored in Cardputer's non-volatile memory instead of the program, and the ability to randomize/change it from options screen
 # Credits
-- [ESP32-Encrypt](https://github.com/josephpal/esp32-Encrypt) - an easy-to-use library for AES128 encryption
+- [ESP32-Encrypt](https://github.com/josephpal/esp32-Encrypt) - a library for AES128 encryption
+- [TOTP-Arduino](https://github.com/lucadentella/TOTP-Arduino) - a library for generating time-based one time passwords for 2FA
+- [Arduino-Base32-Decode](https://github.com/dirkx/Arduino-Base32-Decode) - a library for handling Base32
