@@ -692,7 +692,7 @@ void drawUI() {
       canvas.setTextDatum(top_center);
       switch(mode5_page) {
         case 0:
-          canvas.drawString("2026 PWDer by floriano (0.1) >", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString("2026 PWDer by floriano (0.2) >", M5Cardputer.Display.width() / 2, 50);
           break;
         case 1:
           canvas.drawString("< Visit my website! >", M5Cardputer.Display.width() / 2, 50);
