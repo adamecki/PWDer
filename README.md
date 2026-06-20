@@ -99,7 +99,7 @@ With that said, even if you have an OTP in your database, PWDer won't show it if
 
 ### How does it work?
 <img src="./photos/kptotp.png" alt="KeePass TOTP settings for an entry" width="40%">
-KeePass supports TOTP. If a secret key for your entry is set, the Python script provided will find it and place it in your import file for PWDer. Just like passwords, it is stored on the SD card in an encrypted form (excluding the import phase for now).
+KeePassXC supports TOTP. If a secret key for your entry is set, the Python script provided will find it and place it in your import file for PWDer. Just like passwords, it is stored on the SD card in an encrypted form (excluding the import phase for now).
 
 Otherwise, if you're writing an import file manually, you can add the secret key as the fourth line of each entry, as described earlier.
 

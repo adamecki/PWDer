@@ -1,6 +1,7 @@
 from pykeepass import PyKeePass
 from getpass import getpass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import unquote
 import time
 import sys
 import os
@@ -63,6 +64,7 @@ else:
                         pwdstring += f'{entry.password}\n'
                         otp = smartSubstring("secret=", "&", f'{entry.otp}')
                         if otp:
+                            otp = unquote(otp)
                             pwdstring += otp
                     i += 1
                 if(len(sys.argv) > 2 and sys.argv[2] == '--genfile'):

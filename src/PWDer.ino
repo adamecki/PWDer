@@ -27,10 +27,9 @@ NTPClient timeClient(ntpUDP); // change to modifiable ntp server later
 #define CONFIG_FILE_PATH "/pwder/config"
 #define SECRET_FILE_PATH "/pwder/secret"
 #define IMPORT_FILE_PATH "/pwimport"
+#define EXPORT_FILE_PATH "/pwexport"
 
-#define WIFI_TIMEOUT_SECONDS 5 // Increase this value if your Wi-Fi takes longer to connect with
-// set to 0 if you don't plan to use Wi-Fi and don't want your device to lag for 5 seconds every start
-// in the future I'll make an option to disable wi-fi
+int wifi_timeout_seconds = 5; // Default value if config file is not readable
 
 // variables with no value will be imported from files
 String wifissid;
@@ -63,6 +62,7 @@ bool mode0_wasVPressed = false;
 String mode1_devicepassword;
 String mode1_passwordinput = "";
 bool mode1_ispasswordbeingchanged = false;
+bool mode1_ispasswordbeingexported = false;
 
 int mode2_page = 0;
 
@@ -113,7 +113,8 @@ Cipher* cipher = new Cipher();
 void generate_totp(String secret) {
   if(totp_available && network_available) {
     timeClient.update();
-    uint8_t decoded[32];
+    const int decoded_len = secret.length();
+    uint8_t decoded[decoded_len];
     int keyLen = base32decode(secret.c_str(), decoded, sizeof(decoded));
     TOTP totp = TOTP(decoded, keyLen);
     strncpy(totp_buffer, totp.getCode(timeClient.getEpochTime()), sizeof(totp_buffer));
@@ -154,7 +155,7 @@ void save_spkstate(String state = "0") {
   spkstate_file.close();
 }
 
-void save_config(String input_mode = "2", String ssid = "sample", String wpwd = "password", String ipaddr = "192.168.1.100", String port = "2137", String devpwd = "default") {
+void save_config(String input_mode = "2", String ssid = "sample", String wpwd = "password", String ipaddr = "192.168.1.100", String port = "2137", String devpwd = "default", String timeout = "5") {
   if(SD.exists(CONFIG_FILE_PATH)) { SD.remove(CONFIG_FILE_PATH); }
 
   String long_config_string = input_mode +
@@ -163,11 +164,32 @@ void save_config(String input_mode = "2", String ssid = "sample", String wpwd = 
                               String('\n') + ipaddr +
                               String('\n') + port +
                               String('\n') + devpwd +
+                              String('\n') + timeout +
                               String('\n');
   
   File config_file = SD.open(CONFIG_FILE_PATH, FILE_WRITE);
   config_file.print(cipher->encryptString(long_config_string));
   config_file.close();
+}
+
+void export_passwords() {
+  if(SD.exists(EXPORT_FILE_PATH)) { SD.remove(EXPORT_FILE_PATH); }
+
+  String long_export_string = "";
+
+  for(int i = 0; i < mode0_max; i++) {
+    long_export_string += title[i] + String('\n');
+    long_export_string += username[i] + String('\n');
+    long_export_string += password[i] + String('\n');
+    long_export_string += totp_secret[i];
+    if(i < (mode0_max - 1)) {
+      long_export_string += String('\n');
+    }
+  }
+
+  File export_file = SD.open(EXPORT_FILE_PATH, FILE_WRITE);
+  export_file.print(long_export_string);
+  export_file.close();
 }
 
 void importPasswordsFromFile() {
@@ -242,23 +264,25 @@ void readResponse(NetworkClient* client, String &lines) {
 }
 
 void retry_connection() {
-  WiFi.begin(wifissid, wifipswd);
+  if(wifi_timeout_seconds != 0) {
+    WiFi.begin(wifissid, wifipswd);
 
-  int timeout_500ms = 0;
-  
-  while(WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    timeout_500ms++;
-    if (timeout_500ms >= (2 * WIFI_TIMEOUT_SECONDS)) {
-      break;
+    int timeout_500ms = 0;
+    
+    while(WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      timeout_500ms++;
+      if (timeout_500ms >= (2 * wifi_timeout_seconds)) {
+        break;
+      }
     }
-  }
 
-  network_available = false;
+    network_available = false;
 
-  if(timeout_500ms < (2 * WIFI_TIMEOUT_SECONDS)) {
-    network_available = true;
-    timeClient.begin();  
+    if(timeout_500ms < (2 * wifi_timeout_seconds)) {
+      network_available = true;
+      timeClient.begin();  
+    }
   }
 }
 
@@ -542,13 +566,13 @@ void drawUI() {
               break;
           }
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("[ 1 / 6 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("[ 1 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 1:
           canvas.setTextDatum(top_center);
           canvas.drawString("WiFi SSID: " + mode3_tempssid + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 2 / 6 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("< [ 2 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
           canvas.setTextDatum(top_center);
@@ -558,19 +582,19 @@ void drawUI() {
           }
           canvas.drawString("WiFi Key: " + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 3 / 6 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("< [ 3 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
           canvas.setTextDatum(top_center);
           canvas.drawString("Sync host: " + mode3_tempaddr + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 4 / 6 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("< [ 4 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
           canvas.setTextDatum(top_center);
           canvas.drawString("Sync port: " + mode3_tempport + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 5 / 6 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("< [ 5 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 5:
           canvas.setTextDatum(top_center);
@@ -580,7 +604,23 @@ void drawUI() {
           }
           canvas.drawString("Password: " + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 6 / 6 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString("< [ 6 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          break;
+        case 6:
+          canvas.setTextDatum(top_center);
+          if(wifi_timeout_seconds == 0) {
+            canvas.drawString("Wi-Fi timeout: Wi-Fi Off", M5Cardputer.Display.width() / 2, 50);
+          } else {
+            canvas.drawString("Wi-Fi timeout: " + String(wifi_timeout_seconds) + " s", M5Cardputer.Display.width() / 2, 50);
+          }
+          canvas.setTextDatum(bottom_center);
+          canvas.drawString("< [ 7 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          break;
+        case 7:
+          canvas.setTextDatum(top_center);
+          canvas.drawString("Enter to export vault to SD", M5Cardputer.Display.width() / 2, 50);
+          canvas.setTextDatum(bottom_center);
+          canvas.drawString("< [ 8 / 8 ] ", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
@@ -883,6 +923,11 @@ void setup() {
   // if they don't exist - create them and add sample data
   // if they exist - import data
 
+  // remove export file every run for safety
+  if(SD.exists(EXPORT_FILE_PATH)) {
+    SD.remove(EXPORT_FILE_PATH);
+  }
+
   if(!SD.exists(PWDER_DIR_PATH)) {
     SD.mkdir(PWDER_DIR_PATH);
   }
@@ -909,11 +954,11 @@ void setup() {
     String long_config_read = cipher->decryptString(config_file.readString());
     config_file.close();
     
-    String config_read[6];
+    String config_read[7];
     
     int startPosition = 0;
     int newlinePosition = long_config_read.indexOf('\n', startPosition);
-    for(int i = 0; i < 6; i++) {
+    for(int i = 0; i < 7; i++) {
       if(newlinePosition != -1) {
         config_read[i] = long_config_read.substring(startPosition, newlinePosition);
       } else { // we treat incomplete config file as an incorrect one
@@ -952,6 +997,8 @@ void setup() {
     hostname = config_read[3];
     httpport = config_read[4];
     mode1_devicepassword = config_read[5];
+
+    wifi_timeout_seconds = config_read[6].toInt();
   } else {
     if(SD.exists(SECRET_FILE_PATH)) {
       SD.remove(SECRET_FILE_PATH);
@@ -1254,9 +1301,10 @@ void loop() {
           break;
           
         case 1:
-          if (mode1_ispasswordbeingchanged && M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
+          if ((mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
             device_mode = 3;
             mode1_ispasswordbeingchanged = false;
+            mode1_ispasswordbeingexported = false;
             mode1_passwordinput = "";
             drawUI();
             pushIcon(error, 4, 4);
@@ -1273,24 +1321,28 @@ void loop() {
             }
   
             if(status.enter) {
-              if(mode1_ispasswordbeingchanged) {
+              if(mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported) {
                 if(mode1_passwordinput == mode1_devicepassword) {
                   device_mode = 3;
-                  mode1_ispasswordbeingchanged = false;
-                  mode1_devicepassword = mode3_tempdpwd;
-                  save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword);
-                  mode1_passwordinput = "";
+                  if(mode1_ispasswordbeingchanged) {
+                    mode1_devicepassword = mode3_tempdpwd;
+                    save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword, String(wifi_timeout_seconds));
+                  } else if(mode1_ispasswordbeingexported) {
+                    export_passwords();
+                  }
                   drawUI();
                   pushIcon(ok, 4, 4);
-                  canvas.pushSprite(0, 0);
                 } else {
                   device_mode = 3;
-                  mode1_ispasswordbeingchanged = false;
-                  mode1_passwordinput = "";
                   drawUI();
                   pushIcon(error, 4, 4);
-                  canvas.pushSprite(0, 0);
                 }
+
+                canvas.pushSprite(0, 0);
+
+                mode1_passwordinput = "";
+                mode1_ispasswordbeingchanged = false;
+                mode1_ispasswordbeingexported = false;
               } else {
                 if(mode1_passwordinput == mode1_devicepassword) {
                     // after unlocking
@@ -1348,7 +1400,7 @@ void loop() {
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed(',') && mode3_page > 0) {
             mode3_page--;
             drawUI();  
-          } else if((M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page < 5) || (M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page == 0)) {
+          } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page < 7) {
             mode3_page++;
             drawUI();
           } else {
@@ -1431,11 +1483,23 @@ void loop() {
                   device_mode = 1;
                   drawUI();
                   break;
+                case 6:
+                  if(wifi_timeout_seconds < 15) {
+                    wifi_timeout_seconds++;
+                  } else {
+                    wifi_timeout_seconds = 0;
+                  }
+                  break;
+                case 7:
+                  mode1_ispasswordbeingexported = true;
+                  device_mode = 1;
+                  drawUI();
+                  break;
                 default:
                   break;
               }
-              if(!mode1_ispasswordbeingchanged) {
-                save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword);
+              if(!(mode1_ispasswordbeingchanged && mode1_ispasswordbeingexported)) {
+                save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword, String(wifi_timeout_seconds));
                 pushIcon(ok, 4, 4);
                 canvas.pushSprite(0, 0);
               }
