@@ -27,7 +27,7 @@ def getLocalIP():
     return localIP
 
 hostname = getLocalIP()
-http_port = 2137
+http_port = 7305
 pwdstring = ''
 
 class PwderServer(BaseHTTPRequestHandler):

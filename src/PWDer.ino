@@ -121,7 +121,7 @@ void generate_totp(String secret) {
   }
 }
 
-void pushIcon(const uint8_t bitmap[], int xoffset = 0, int yoffset = 0, int scale = 1) {
+void push_icon(const uint8_t bitmap[], int xoffset = 0, int yoffset = 0, int scale = 1) {
   // There is a scale feature I implemented, however it's not used at all.
   // Maybe somewhere in the future it might be useful somewhere, so I'm leaving it here.
   
@@ -155,10 +155,10 @@ void save_spkstate(String state = "0") {
   spkstate_file.close();
 }
 
-void save_config(String input_mode = "2", String ssid = "sample", String wpwd = "password", String ipaddr = "192.168.1.100", String port = "2137", String devpwd = "default", String timeout = "5") {
+void save_config(String input_mode = "2", String ssid = "sample", String wpwd = "password", String ipaddr = "192.168.1.100", String port = "7305", String devpwd = "default", String timeout = "5") {
   if(SD.exists(CONFIG_FILE_PATH)) { SD.remove(CONFIG_FILE_PATH); }
 
-  String long_config_string = input_mode +
+  String config_save_string = input_mode +
                               String('\n') + ssid +
                               String('\n') + wpwd +
                               String('\n') + ipaddr +
@@ -168,38 +168,38 @@ void save_config(String input_mode = "2", String ssid = "sample", String wpwd = 
                               String('\n');
   
   File config_file = SD.open(CONFIG_FILE_PATH, FILE_WRITE);
-  config_file.print(cipher->encryptString(long_config_string));
+  config_file.print(cipher->encryptString(config_save_string));
   config_file.close();
 }
 
 void export_passwords() {
   if(SD.exists(EXPORT_FILE_PATH)) { SD.remove(EXPORT_FILE_PATH); }
 
-  String long_export_string = "";
+  String export_save_string = "";
 
   for(int i = 0; i < mode0_max; i++) {
-    long_export_string += title[i] + String('\n');
-    long_export_string += username[i] + String('\n');
-    long_export_string += password[i] + String('\n');
-    long_export_string += totp_secret[i];
+    export_save_string += title[i] + String('\n');
+    export_save_string += username[i] + String('\n');
+    export_save_string += password[i] + String('\n');
+    export_save_string += totp_secret[i];
     if(i < (mode0_max - 1)) {
-      long_export_string += String('\n');
+      export_save_string += String('\n');
     }
   }
 
   File export_file = SD.open(EXPORT_FILE_PATH, FILE_WRITE);
-  export_file.print(long_export_string);
+  export_file.print(export_save_string);
   export_file.close();
 }
 
-void importPasswordsFromFile() {
+void file_password_import() {
   File import_file = SD.open(IMPORT_FILE_PATH, FILE_READ);
 
   // reset
   mode0_max = 0;
   
   int swcase = 0;
-  String import_string = "";
+  String import_string = mode1_devicepassword + String('\n');
   while(import_file.available()) {
     if(mode0_max == 100) {
       break;
@@ -243,7 +243,7 @@ void importPasswordsFromFile() {
   secret_file.close();
 }
 
-void readResponse(NetworkClient* client, String &lines) {
+void read_response(NetworkClient* client, String &lines) {
   unsigned long timeout = millis();
   while(client->available() == 0) {
     if(millis() - timeout > 5000) {
@@ -286,7 +286,7 @@ void retry_connection() {
   }
 }
 
-void importPasswordsFromNetwork() {
+void net_password_import() {
   if(network_available) {
     const char* host = hostname.c_str();
     const int   port = httpport.toInt();
@@ -314,7 +314,7 @@ void importPasswordsFromNetwork() {
     drawUI();
     
     client.print(readRequest);
-    readResponse(&client, import_string);
+    read_response(&client, import_string);
   
     if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
   
@@ -382,13 +382,13 @@ void drawUI() {
   switch(device_mode) {
     case 0:
       // icons
-      pushIcon(key, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
-      pushIcon(help, M5Cardputer.Display.width() - 36, 4);
+      push_icon(key, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(help, M5Cardputer.Display.width() - 36, 4);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
 
       // captions
@@ -406,7 +406,9 @@ void drawUI() {
         canvas.setTextDatum(top_center);
         if (network_available && totp_available) {
           generate_totp(totp_secret[mode0_selection]);
+          canvas.setTextColor(BLUE);
           canvas.drawString(username[mode0_selection] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
+          canvas.setTextColor(BLACK);
           totp_buffer[6] = '\0';
         } else {
           canvas.drawString(username[mode0_selection], M5Cardputer.Display.width() / 2, 50);
@@ -415,14 +417,14 @@ void drawUI() {
         canvas.drawString(password[mode0_selection], M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
       } else {
         canvas.setTextDatum(top_center);
+        if(network_available && totp_available) {
+          canvas.setTextColor(BLUE);
+        }
         canvas.drawString(title[mode0_selection], M5Cardputer.Display.width() / 2, 50);
+        canvas.setTextColor(BLACK);
         canvas.setTextDatum(bottom_center);
         if(mode0_max == 1) {
-          if(network_available && totp_available) {
-            canvas.drawString("[ 1 / 1 ] (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          } else {
-            canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          }
+          canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
         } else {
           String enumerator;
           if(mode0_selection == 0) {
@@ -432,11 +434,7 @@ void drawUI() {
           } else {
             enumerator = "< [ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >";
           }
-          if(network_available && totp_available) {
-            canvas.drawString(enumerator + " (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          } else {
-            canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-          }
+          canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
         }
       }
       
@@ -446,8 +444,8 @@ void drawUI() {
 
     case 1:
       // icons
-      pushIcon(padlock, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(padlock, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
 
       // captions
       canvas.setTextColor(WHITE);
@@ -469,12 +467,12 @@ void drawUI() {
 
     case 2:
       // icons
-      pushIcon(help, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(help, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
 
       // captions
@@ -533,12 +531,12 @@ void drawUI() {
 
     case 3:
       // icons
-      pushIcon(options, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(options, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
       
       // captions
@@ -635,22 +633,22 @@ void drawUI() {
         case 0:
         case 1:
         case 2:
-          pushIcon(frame0, 4, 4);
+          push_icon(frame0, 4, 4);
           break;
         case 3:
-          pushIcon(ok, 4, 4);
+          push_icon(ok, 4, 4);
           break;
         case 4:
         case 5:
         case 6:
-          pushIcon(error, 4, 4);
+          push_icon(error, 4, 4);
           break;
       }
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
       
       // captions
@@ -711,12 +709,12 @@ void drawUI() {
 
     case 5:
       // icons
-      pushIcon(me, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(me, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
 
       // captions
@@ -776,12 +774,12 @@ void drawUI() {
       
     case 6:
       // icons
-      pushIcon(options, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(options, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
 
       // captions
@@ -805,12 +803,12 @@ void drawUI() {
 
     case 7:
       // icons
-      pushIcon(search, 4, 4);
-      pushIcon(battery, 4, M5Cardputer.Display.height() - 36);
+      push_icon(search, 4, 4);
+      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
       if(device_muted) {
-        pushIcon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       } else {
-        pushIcon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
       }
 
       // captions
@@ -833,7 +831,9 @@ void drawUI() {
           canvas.setTextDatum(top_center);
           if (network_available && totp_available) {
             generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
+            canvas.setTextColor(BLUE);
             canvas.drawString(username[mode7_contains_searched_string[mode7_index]] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
+            canvas.setTextColor(BLACK);
             totp_buffer[6] = '\0';
           } else {
             canvas.drawString(username[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
@@ -843,18 +843,18 @@ void drawUI() {
         } else {
           if(mode7_matches > 0) {
             canvas.setTextDatum(top_center);
+            if(network_available && totp_available) {
+              canvas.setTextColor(BLUE);
+            }
             canvas.drawString(title[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
+            canvas.setTextColor(BLACK);
           }
           canvas.setTextDatum(bottom_center);
           if(mode7_matches == 0) {
             canvas.setTextDatum(middle_center);
             canvas.drawString("No results", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
           } else if(mode7_matches == 1) {
-            if(network_available && totp_available) {
-              canvas.drawString("[ 1 / 1 ] (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-            } else {
-              canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-            }
+            canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           } else {
             String enumerator;
             if(mode7_index == 0) {
@@ -864,11 +864,7 @@ void drawUI() {
             } else {
               enumerator = "< [ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >";
             }
-            if(network_available && totp_available) {
-              canvas.drawString(enumerator + " (TOTP)", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-            } else {
-              canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-            }
+            canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           }
         }
       } else {
@@ -904,7 +900,7 @@ void setup() {
     canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, DARKGREY);
     canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, LIGHTGREY);
     
-    pushIcon(error, 4, 4);
+    push_icon(error, 4, 4);
 
     canvas.setTextDatum(middle_left);
     canvas.drawString("Error", 40, 20);
@@ -951,16 +947,16 @@ void setup() {
   // config
   if(SD.exists(CONFIG_FILE_PATH)) {
     File config_file = SD.open(CONFIG_FILE_PATH, FILE_READ);
-    String long_config_read = cipher->decryptString(config_file.readString());
+    String config_read_string = cipher->decryptString(config_file.readString());
     config_file.close();
     
     String config_read[7];
     
-    int startPosition = 0;
-    int newlinePosition = long_config_read.indexOf('\n', startPosition);
+    int start_position = 0;
+    int newline_position = config_read_string.indexOf('\n', start_position);
     for(int i = 0; i < 7; i++) {
-      if(newlinePosition != -1) {
-        config_read[i] = long_config_read.substring(startPosition, newlinePosition);
+      if(newline_position != -1) {
+        config_read[i] = config_read_string.substring(start_position, newline_position);
       } else { // we treat incomplete config file as an incorrect one
         if(SD.exists(SECRET_FILE_PATH)) {
           SD.remove(SECRET_FILE_PATH);
@@ -972,14 +968,14 @@ void setup() {
         wifissid = "sample";
         wifipswd = "password";
         hostname = "192.168.1.100";
-        httpport = "2137";
+        httpport = "7305";
         mode1_devicepassword = "default";
 
         break;
       }
 
-      startPosition = newlinePosition + 1;
-      newlinePosition = long_config_read.indexOf('\n', startPosition);
+      start_position = newline_position + 1;
+      newline_position = config_read_string.indexOf('\n', start_position);
     }
 
     // input type selection
@@ -1010,7 +1006,7 @@ void setup() {
     wifissid = "sample";
     wifipswd = "password";
     hostname = "192.168.1.100";
-    httpport = "2137";
+    httpport = "7305";
     mode1_devicepassword = "default";
   }
 
@@ -1023,82 +1019,106 @@ void setup() {
   // secret
   if (SD.exists(SECRET_FILE_PATH)) {
     File secret_file = SD.open(SECRET_FILE_PATH, FILE_READ);
-    String long_secret_file = cipher->decryptString(secret_file.readString());
+    String secret_read_string = cipher->decryptString(secret_file.readString());
     secret_file.close();
 
     int swcase = 0;
 
-    int startPosition = 0;
-    int newlinePosition = long_secret_file.indexOf('\n', startPosition);
-    
-    while(newlinePosition != -1) {
-      if(mode0_max > 99) {
-        break;
-      } else {
-        switch(swcase) {
-          case 0:
-            title[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
-            if(title[mode0_max][title[mode0_max].length() - 1] == '\r') {
-              title[mode0_max].remove(title[mode0_max].length() - 1);
-            }
-            swcase = 1;
-            break;
-          case 1:
-            username[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
-            if(username[mode0_max][username[mode0_max].length() - 1] == '\r') {
-              username[mode0_max].remove(username[mode0_max].length() - 1);
-            }
-            swcase = 2;
-            break;
-          case 2:
-            password[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
-            if(password[mode0_max][password[mode0_max].length() - 1] == '\r') {
-              password[mode0_max].remove(password[mode0_max].length() - 1);
-            }
-            swcase = 3;
-            break;
-          case 3:
-            totp_secret[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
-            if(totp_secret[mode0_max][totp_secret[mode0_max].length() - 1] == '\r') {
-              totp_secret[mode0_max].remove(totp_secret[mode0_max].length() - 1);
-            }
-            mode0_max++;
-            swcase = 0;
-            break;
-          default:
-            break;
-        }
+    int start_position = 0;
+    int newline_position = secret_read_string.indexOf('\n', start_position);
+
+    if (newline_position != -1) {
+      String passcheck = secret_read_string.substring(start_position, newline_position);
+      if (passcheck[passcheck.length() - 1] == '\r') {
+        passcheck.remove(passcheck.length() - 1);
       }
-      startPosition = newlinePosition + 1;
-      newlinePosition = long_secret_file.indexOf('\n', startPosition);
+      if (passcheck != mode1_devicepassword) {
+        if(SD.exists(SECRET_FILE_PATH)) { SD.remove(SECRET_FILE_PATH); }
+        if(SD.exists(CONFIG_FILE_PATH)) { SD.remove(CONFIG_FILE_PATH); }
+        
+        canvas.setTextColor(RED);
+        canvas.setTextDatum(top_center);
+        canvas.drawString("Vault integrity check failed.", M5Cardputer.Display.width() / 2, 9);
+        canvas.drawString("Its files might have been altered.", M5Cardputer.Display.width() / 2, 43);
+        canvas.drawString("Please import passwords again", M5Cardputer.Display.width() / 2, 77);
+        canvas.drawString("or back up your vault.", M5Cardputer.Display.width() / 2, 111);
+        canvas.pushSprite(0, 0);
+
+        while(1);
+      }
+
+      start_position = newline_position + 1;
+      newline_position = secret_read_string.indexOf('\n', start_position);
+
+      while(newline_position != -1) {
+        if(mode0_max > 99) {
+          break;
+        } else {
+          switch(swcase) {
+            case 0:
+              title[mode0_max] = secret_read_string.substring(start_position, newline_position);
+              if(title[mode0_max][title[mode0_max].length() - 1] == '\r') {
+                title[mode0_max].remove(title[mode0_max].length() - 1);
+              }
+              swcase = 1;
+              break;
+            case 1:
+              username[mode0_max] = secret_read_string.substring(start_position, newline_position);
+              if(username[mode0_max][username[mode0_max].length() - 1] == '\r') {
+                username[mode0_max].remove(username[mode0_max].length() - 1);
+              }
+              swcase = 2;
+              break;
+            case 2:
+              password[mode0_max] = secret_read_string.substring(start_position, newline_position);
+              if(password[mode0_max][password[mode0_max].length() - 1] == '\r') {
+                password[mode0_max].remove(password[mode0_max].length() - 1);
+              }
+              swcase = 3;
+              break;
+            case 3:
+              totp_secret[mode0_max] = secret_read_string.substring(start_position, newline_position);
+              if(totp_secret[mode0_max][totp_secret[mode0_max].length() - 1] == '\r') {
+                totp_secret[mode0_max].remove(totp_secret[mode0_max].length() - 1);
+              }
+              mode0_max++;
+              swcase = 0;
+              break;
+            default:
+              break;
+          }
+        }
+        start_position = newline_position + 1;
+        newline_position = secret_read_string.indexOf('\n', start_position);
+      }
     }
 
-    if (startPosition < long_secret_file.length()) {
+    if (start_position < secret_read_string.length()) {
       if(mode0_max < 100) {
         switch(swcase) {
           case 0:
-            title[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            title[mode0_max] = secret_read_string.substring(start_position, newline_position);
             if(title[mode0_max][title[mode0_max].length() - 1] == '\r') {
               title[mode0_max].remove(title[mode0_max].length() - 1);
             }
             swcase = 1;
             break;
           case 1:
-            username[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            username[mode0_max] = secret_read_string.substring(start_position, newline_position);
             if(username[mode0_max][username[mode0_max].length() - 1] == '\r') {
               username[mode0_max].remove(username[mode0_max].length() - 1);
             }
             swcase = 2;
             break;
           case 2:
-            password[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            password[mode0_max] = secret_read_string.substring(start_position, newline_position);
             if(password[mode0_max][password[mode0_max].length() - 1] == '\r') {
               password[mode0_max].remove(password[mode0_max].length() - 1);
             }
             swcase = 3;
             break;
           case 3:
-            totp_secret[mode0_max] = long_secret_file.substring(startPosition, newlinePosition);
+            totp_secret[mode0_max] = secret_read_string.substring(start_position, newline_position);
             if(totp_secret[mode0_max][totp_secret[mode0_max].length() - 1] == '\r') {
               totp_secret[mode0_max].remove(totp_secret[mode0_max].length() - 1);
             }
@@ -1111,27 +1131,29 @@ void setup() {
       }
     }
 
+    // If no passwords are present
     if(mode0_max < 1) {
-      String default_secret_file = "Nothing" + String('\n') + "absolute" + String('\n') + "emptiness";
+      String default_secret_file = mode1_devicepassword + String('\n') + "Sample Entry" + String('\n') + "sample_user" + String('\n') + "sample_password" + String('\n');
       File secret_file = SD.open(SECRET_FILE_PATH, FILE_WRITE);
       secret_file.print(cipher->encryptString(default_secret_file));
       secret_file.close();
   
-      title[0] = "Nothing";
-      username[0] = "absolute";
-      password[0] = "emptiness";
+      title[0] = "Sample Entry";
+      username[0] = "sample_user";
+      password[0] = "sample_password";
   
       mode0_max = 1;
     }
   } else {
-    String default_secret_file = "Nothing" + String('\n') + "absolute" + String('\n') + "emptiness";
+    // If a secret file does not exist
+    String default_secret_file = mode1_devicepassword + String('\n') + "Sample Entry" + String('\n') + "sample_user" + String('\n') + "sample_password" + String('\n');
     File secret_file = SD.open(SECRET_FILE_PATH, FILE_WRITE);
     secret_file.print(cipher->encryptString(default_secret_file));
     secret_file.close();
 
-    title[0] = "Nothing";
-    username[0] = "absolute";
-    password[0] = "emptiness";
+    title[0] = "Sample Entry";
+    username[0] = "sample_user";
+    password[0] = "sample_password";
 
     mode0_max = 1;
   }
@@ -1190,12 +1212,12 @@ void loop() {
           } else if (M5Cardputer.Keyboard.isKeyPressed('s')) { // synchronize
             device_mode = 4;
             drawUI();
-            importPasswordsFromNetwork();
+            net_password_import();
           } else if (M5Cardputer.Keyboard.isKeyPressed('o')) { // options
             device_mode = 3;
             drawUI();
-//          } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {/ // retry connecting to Wi-Fi (future, now restart needed)
-//            retry_connection();/
+  //      } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {/ // retry connecting to Wi-Fi (future, now restart needed)
+  //        retry_connection();/
           } else if (M5Cardputer.Keyboard.isKeyPressed('l')) { // lock
             device_mode = 1;
             drawUI();
@@ -1307,7 +1329,7 @@ void loop() {
             mode1_ispasswordbeingexported = false;
             mode1_passwordinput = "";
             drawUI();
-            pushIcon(error, 4, 4);
+            push_icon(error, 4, 4);
             canvas.pushSprite(0, 0);
           } else {
             for(auto i : status.word) {
@@ -1327,15 +1349,27 @@ void loop() {
                   if(mode1_ispasswordbeingchanged) {
                     mode1_devicepassword = mode3_tempdpwd;
                     save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword, String(wifi_timeout_seconds));
+
+                    // Update vault with new password
+                    File old_vault = SD.open(SECRET_FILE_PATH, FILE_READ);
+                    String old_vault_str = cipher->decryptString(old_vault.readString());
+                    old_vault.close();
+
+                    if(SD.exists(SECRET_FILE_PATH)) { SD.remove(SECRET_FILE_PATH); }
+
+                    File new_vault = SD.open(SECRET_FILE_PATH, FILE_WRITE);
+                    String new_vault_str = mode1_devicepassword + old_vault_str.substring(old_vault_str.indexOf('\n', 0)); // replace first line
+                    new_vault.print(cipher->encryptString(new_vault_str));
+                    new_vault.close();
                   } else if(mode1_ispasswordbeingexported) {
                     export_passwords();
                   }
                   drawUI();
-                  pushIcon(ok, 4, 4);
+                  push_icon(ok, 4, 4);
                 } else {
                   device_mode = 3;
                   drawUI();
-                  pushIcon(error, 4, 4);
+                  push_icon(error, 4, 4);
                 }
 
                 canvas.pushSprite(0, 0);
@@ -1498,9 +1532,10 @@ void loop() {
                 default:
                   break;
               }
-              if(!(mode1_ispasswordbeingchanged && mode1_ispasswordbeingexported)) {
+              if(!(mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported)) {
                 save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword, String(wifi_timeout_seconds));
-                pushIcon(ok, 4, 4);
+                drawUI();
+                push_icon(ok, 4, 4);
                 canvas.pushSprite(0, 0);
               }
             }
@@ -1545,7 +1580,7 @@ void loop() {
             }
             drawUI();
           } else if(M5Cardputer.Keyboard.isKeyPressed('y')) {
-            importPasswordsFromFile();
+            file_password_import();
             device_mode = 0;
             drawUI();
           } else if(M5Cardputer.Keyboard.isKeyPressed('n')) {

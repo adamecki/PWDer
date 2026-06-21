@@ -98,14 +98,14 @@ Neither ESP32, nor Cardputer do have an RTC backup battery, so the Cardputer nee
 With that said, even if you have an OTP in your database, PWDer won't show it if it's unable to synchronize time via NTP.
 
 ### How does it work?
-<img src="./photos/kptotp.png" alt="KeePass TOTP settings for an entry" width="40%">
+<img src="./photos/kptotp.webp" alt="KeePass TOTP settings for an entry" width="40%">
 KeePassXC supports TOTP. If a secret key for your entry is set, the Python script provided will find it and place it in your import file for PWDer. Just like passwords, it is stored on the SD card in an encrypted form (excluding the import phase for now).
 
 Otherwise, if you're writing an import file manually, you can add the secret key as the fourth line of each entry, as described earlier.
 
 ### Where do I find it?
 <img src="./photos/totpishere.webp" alt="TOTP is here" width="40%">
-If the NTP requirements are met and your entry has a TOTP secret set, you will see a "(TOTP)" sign at the bottom row of an entry. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
+If the NTP requirements are met and your entry has a TOTP secret set, the entry title will be blue. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
 
 ## Lock screen
 Here you have to enter the correct password (then press OK) to access the device. If you've locked yourself out, you can remove the `pwder/config` file from the SD card (the password will be "default" again), but keep in mind that all your saved passwords and configuration will disappear!
