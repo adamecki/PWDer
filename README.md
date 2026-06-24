@@ -102,14 +102,14 @@ If you have an M5Unit RTC, connect it to Cardputer's Grove connector before star
 
 <img src="./photos/totpishere.webp" alt="TOTP is here" width="40%">
 
+<img src="./photos/m5unitrtc.webp" alt="M5Unit RTC attached to a Cardputer" width="40%">
+
 Currently, there is no way to set time of the RTC directly from PWDer. However, in the future, I will introduce both manual time adjustment and setting the RTC time via NTP.
 
 *Notice: Don't connect any other units to the Grove connector while PWDer is running. It hasn't been tested, but Cardputer might read it incorrectly as an M5Unit RTC and give incorrect time-based one-time passwords.
 
 ### Second solution: NTP network time
 The Cardputer can to connect to an NTP server via Wi-Fi in order to synchronize time, so it can generate a TOTP. For now, the default pool.ntp.org NTP server for the NTP client library is used, but in the future there will be a way to change the NTP server directly from PWDer's UI. For now the only way to change an NTP server is editing the code.
-
-<img src="./photos/m5unitrtc.webp" alt="M5Unit RTC attached to a Cardputer" width="40%">
 
 With that said, even if you have a TOTP secret in your database, PWDer won't show the TOTP if it doesn't have a time provider. If both RTC and NTP are available, Cardputer uses RTC as the primary time provider, as it is more reliable (works offline).
 
