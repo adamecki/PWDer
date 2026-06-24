@@ -7,15 +7,24 @@
 #include "TOTP.h"
 #include "Base32-Decode.h"
 #include <NTPClient.h>
+#include <Unit_RTC.h>
+#include <time.h>
+#include <cstdlib>
 #include "Cipher.h"
 #include "enckey.h"
 #include "icons.h"
+
+// change to compile with preferred language
+#define lang_en
+// #define lang_pl
+#include "ui_strings.h"
 
 M5Canvas canvas(&M5Cardputer.Display);
 USBHIDKeyboard Keyboard;
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP); // change to modifiable ntp server later
+Unit_RTC RTC;
 
 #define SD_CS_PIN 12
 #define SD_MOSI_PIN 14
@@ -38,8 +47,12 @@ String hostname;
 String httpport;
 
 // totp state variables
-bool totp_available = false;
+bool rtc_available = false;
+rtc_time_type rtc_time;
+rtc_date_type rtc_date;
+
 bool network_available = false;
+bool totp_available = false;
 char totp_buffer[7];
 
 int device_mode = 1;
@@ -110,14 +123,39 @@ String totp_secret[100];
 
 Cipher* cipher = new Cipher();
 
+unsigned long to_unix_utc_timestamp(int year, int month, int day, int hour, int minute, int second) {
+  struct tm t;
+
+  t.tm_year = year - 1900;
+  t.tm_mon = month - 1;
+  t.tm_mday = day;
+  t.tm_hour = hour;
+  t.tm_min = minute;
+  t.tm_sec = second;
+  t.tm_isdst = 0;
+  
+  time_t result = mktime(&t);
+  if (result == -1) { return -1; }
+  return (long)result;
+}
+
 void generate_totp(String secret) {
-  if(totp_available && network_available) {
-    timeClient.update();
+  if(totp_available && (network_available || rtc_available)) {
+    if(rtc_available) { // Use RTC as a primary time provider
+      RTC.getDate(&rtc_date);
+      RTC.getTime(&rtc_time);
+    } else {
+      timeClient.update();
+    }
     const int decoded_len = secret.length();
     uint8_t decoded[decoded_len];
     int keyLen = base32decode(secret.c_str(), decoded, sizeof(decoded));
     TOTP totp = TOTP(decoded, keyLen);
-    strncpy(totp_buffer, totp.getCode(timeClient.getEpochTime()), sizeof(totp_buffer));
+    if(rtc_available) {
+      strncpy(totp_buffer, totp.getCode(to_unix_utc_timestamp(rtc_date.Year, rtc_date.Month, rtc_date.Date, rtc_time.Hours, rtc_time.Minutes, rtc_time.Seconds)), sizeof(totp_buffer));
+    } else {
+      strncpy(totp_buffer, totp.getCode(timeClient.getEpochTime()), sizeof(totp_buffer));
+    }
   }
 }
 
@@ -263,6 +301,17 @@ void read_response(NetworkClient* client, String &lines) {
   }
 }
 
+bool start_rtc() {
+  RTC.begin();
+  delay(10);
+  RTC.getDate(&rtc_date);
+  if(rtc_date.Year == 2000) { // the used RTC library puts 2000 as a default year value when receiving no signal from RTC
+    return false;
+  } else {
+    return true;
+  }
+}
+
 void retry_connection() {
   if(wifi_timeout_seconds != 0) {
     WiFi.begin(wifissid, wifipswd);
@@ -381,30 +430,19 @@ void drawUI() {
 
   switch(device_mode) {
     case 0:
-      // icons
+      // icon
       push_icon(key, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      push_icon(help, M5Cardputer.Display.width() - 36, 4);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
 
-      // captions
-      canvas.setTextColor(WHITE);
-      canvas.setTextDatum(middle_right);
-      canvas.drawString("H ->", M5Cardputer.Display.width() - 40, 20);
-      canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
+      // caption
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Passwords", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
+      canvas.setTextColor(WHITE);
+      canvas.drawString(PASSWORD_MANAGER_TITLEBAR, 40, 20);
 
       // content
       canvas.setTextColor(BLACK);
       if(M5Cardputer.Keyboard.isKeyPressed('v')) {
         canvas.setTextDatum(top_center);
-        if (network_available && totp_available) {
+        if ((network_available || rtc_available) && totp_available) {
           generate_totp(totp_secret[mode0_selection]);
           canvas.setTextColor(BLUE);
           canvas.drawString(username[mode0_selection] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
@@ -417,7 +455,7 @@ void drawUI() {
         canvas.drawString(password[mode0_selection], M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
       } else {
         canvas.setTextDatum(top_center);
-        if(network_available && totp_available) {
+        if((network_available || rtc_available) && totp_available) {
           canvas.setTextColor(BLUE);
         }
         canvas.drawString(title[mode0_selection], M5Cardputer.Display.width() / 2, 50);
@@ -437,22 +475,17 @@ void drawUI() {
           canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
         }
       }
-      
-      // push
-      canvas.pushSprite(0, 0);
       break;
 
     case 1:
-      // icons
+      // icon
       push_icon(padlock, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
 
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Enter password", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
-      
+      canvas.drawString(LOGIN_TITLEBAR, 40, 20);
+
       // content
       canvas.setTextColor(BLACK);
       canvas.setTextDatum(middle_center);
@@ -461,90 +494,70 @@ void drawUI() {
         mode1_asterisks += "*";
       }
       canvas.drawString(mode1_asterisks + "_", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
-      
-      canvas.pushSprite(0, 0);
       break;
 
     case 2:
-      // icons
+      // icon
       push_icon(help, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
 
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
-      canvas.setTextDatum(middle_right);
-      canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Help", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
-      
+      canvas.drawString(HANDBOOK_TITLEBAR, 40, 20);
+
       // content
       canvas.setTextColor(BLACK);
       switch(mode2_page) {
         case 0:
           canvas.setTextDatum(top_left);
-          canvas.drawString("H - help", 8, 50);
-          canvas.drawString("< (,) - back", (M5Cardputer.Display.width() / 2) + 8, 50);
+          canvas.drawString(HANDBOOK_KEY_HELP, 8, 50);
+          canvas.drawString(HANDBOOK_KEY_BACK, (M5Cardputer.Display.width() / 2) + 8, 50);
           canvas.setTextDatum(bottom_left);
-          canvas.drawString("Esc (') - exit", 8, M5Cardputer.Display.height() - 50);
-          canvas.drawString("> (/) - forward", (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_EXIT, 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_FORWARD, (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
           break;
         case 1:
           canvas.setTextDatum(top_center);
-          canvas.drawString("1 - username input", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(HANDBOOK_KEY_USERNAME, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("2 - password input", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_PASSWORD, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
           canvas.setTextDatum(top_center);
-          canvas.drawString("3 - full input", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(HANDBOOK_KEY_FULLINPUT, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("OK - default input", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_DEFAULTINPUT, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
           canvas.setTextDatum(top_left);
-          canvas.drawString("T - hit TAB", 8, 50);
-          canvas.drawString("R - hit ENTER", (M5Cardputer.Display.width() / 2) + 8, 50);
+          canvas.drawString(HANDBOOK_KEY_TAB, 8, 50);
+          canvas.drawString(HANDBOOK_KEY_ENTER, (M5Cardputer.Display.width() / 2) + 8, 50);
           canvas.setTextDatum(bottom_left);
-          canvas.drawString("V - preview", 8, M5Cardputer.Display.height() - 50);
-          canvas.drawString("L - lock", (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_PREVIEW, 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_LOCK, (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
           break;
         case 4:
           canvas.setTextDatum(top_left);
-          canvas.drawString("M - mute", 8, 50);
-          canvas.drawString("O - options", (M5Cardputer.Display.width() / 2) + 8, 50);
+          canvas.drawString(HANDBOOK_KEY_MUTE, 8, 50);
+          canvas.drawString(HANDBOOK_KEY_OPTIONS, (M5Cardputer.Display.width() / 2) + 8, 50);
           canvas.setTextDatum(bottom_left);
-          canvas.drawString("S - sync", 8, M5Cardputer.Display.height() - 50);
-          canvas.drawString("C - credits", (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_SYNC, 8, M5Cardputer.Display.height() - 50);
+          canvas.drawString(HANDBOOK_KEY_CREDITS, (M5Cardputer.Display.width() / 2) + 8, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
       }
-      
-      canvas.pushSprite(0, 0);
       break;
 
     case 3:
-      // icons
+      // icon
       push_icon(options, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
       
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Options", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
-      
+      canvas.drawString(OPTIONS_TITLEBAR, 40, 20);
+
       // content
       canvas.setTextColor(BLACK);
       switch(mode3_page) {
@@ -552,13 +565,13 @@ void drawUI() {
           canvas.setTextDatum(top_center);
           switch(mode0_inputtype) {
             case 0:
-              canvas.drawString("Default input mode: username", M5Cardputer.Display.width() / 2, 50);
+              canvas.drawString(OPTIONS_DEFAULT_USERNAME, M5Cardputer.Display.width() / 2, 50);
               break;
             case 1:
-              canvas.drawString("Default input mode: password", M5Cardputer.Display.width() / 2, 50);
+              canvas.drawString(OPTIONS_DEFAULT_PASSWORD, M5Cardputer.Display.width() / 2, 50);
               break;
             case 2:
-              canvas.drawString("Default input mode: full", M5Cardputer.Display.width() / 2, 50);
+              canvas.drawString(OPTIONS_DEFAULT_FULL, M5Cardputer.Display.width() / 2, 50);
               break;
             default:
               break;
@@ -568,7 +581,7 @@ void drawUI() {
           break;
         case 1:
           canvas.setTextDatum(top_center);
-          canvas.drawString("WiFi SSID: " + mode3_tempssid + "_", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_SSID + mode3_tempssid + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 2 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
@@ -578,19 +591,19 @@ void drawUI() {
           for(int i = 0; i < mode3_tempwpwd.length(); i++) {
             mode1_asterisks += "*";
           }
-          canvas.drawString("WiFi Key: " + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_WIFI_PASSWORD + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 3 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync host: " + mode3_tempaddr + "_", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_SYNC_HOST + mode3_tempaddr + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 4 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync port: " + mode3_tempport + "_", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_SYNC_PORT + mode3_tempport + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 5 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
@@ -600,35 +613,33 @@ void drawUI() {
           for(int i = 0; i < mode3_tempdpwd.length(); i++) {
             mode1_asterisks += "*";
           }
-          canvas.drawString("Password: " + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_DEVICE_PASSWORD + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 6 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 6:
           canvas.setTextDatum(top_center);
           if(wifi_timeout_seconds == 0) {
-            canvas.drawString("Wi-Fi timeout: Wi-Fi Off", M5Cardputer.Display.width() / 2, 50);
+            canvas.drawString(OPTIONS_WIFI_OFF, M5Cardputer.Display.width() / 2, 50);
           } else {
-            canvas.drawString("Wi-Fi timeout: " + String(wifi_timeout_seconds) + " s", M5Cardputer.Display.width() / 2, 50);
+            canvas.drawString(OPTIONS_WIFI_TIMEOUT + String(wifi_timeout_seconds) + OPTIONS_WIFI_TIMEOUT_SECONDS_SHORTCUT, M5Cardputer.Display.width() / 2, 50);
           }
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 7 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 7:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Enter to export vault to SD", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(OPTIONS_EXPORT_VAULT, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("< [ 8 / 8 ] ", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
       }
-      
-      canvas.pushSprite(0, 0);
       break;
 
     case 4:
-      // icons
+      // icon
       switch(mode4_page) {
         case 0:
         case 1:
@@ -644,105 +655,87 @@ void drawUI() {
           push_icon(error, 4, 4);
           break;
       }
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
       
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Synchronization", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
+      canvas.drawString(SYNC_TITLEBAR, 40, 20);
 
       // content
       canvas.setTextColor(BLACK);
       switch(mode4_page) {
         case 0:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Connecting to Wi-Fi", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_WIFI_CONNECTING_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 1 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 1:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Connecting to server", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_SERVER_CONNECTING_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 2 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Downloading data", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_DOWNLOAD_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 3 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync OK, disconnecting", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_OK, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("Returning in 3 seconds", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(SYNC_RETURN, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync error:", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("Wi-Fi error", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(SYNC_ERR_DESCRIPTION_WIFI, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 5:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync error:", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("Server error", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(SYNC_ERR_DESCRIPTION_SERVER, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 6:
           canvas.setTextDatum(top_center);
-          canvas.drawString("Sync error:", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
-          canvas.drawString("File error", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(SYNC_ERR_DESCRIPTION_FILE, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
       }
-
-      canvas.pushSprite(0, 0);
       break;
 
     case 5:
-      // icons
+      // icon
       push_icon(me, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
 
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
-      canvas.setTextDatum(middle_right);
-      canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("Credits 8)", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
+      canvas.drawString(CREDITS_TITLEBAR, 40, 20);
   
       // content
       canvas.setTextColor(BLACK);
       canvas.setTextDatum(top_center);
       switch(mode5_page) {
         case 0:
-          canvas.drawString("2026 PWDer by floriano (0.2) >", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(CREDITS_PWDER, M5Cardputer.Display.width() / 2, 50);
           break;
         case 1:
-          canvas.drawString("< Visit my website! >", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(CREDITS_WEBSITE, M5Cardputer.Display.width() / 2, 50);
           break;
         case 2:
-          canvas.drawString("< Thx for an AES128 library <3 >", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(CREDITS_AES128, M5Cardputer.Display.width() / 2, 50);
           break;
         case 3:
-          canvas.drawString("< Thx for a TOTP library <3 >", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(CREDITS_TOTP, M5Cardputer.Display.width() / 2, 50);
           break;
         case 4:
-          canvas.drawString("< Thx for a Base32 library <3", M5Cardputer.Display.width() / 2, 50);
+          canvas.drawString(CREDITS_BASE32, M5Cardputer.Display.width() / 2, 50);
           break;
         default:
           break;
@@ -751,85 +744,61 @@ void drawUI() {
       canvas.setTextColor(PURPLE);
       switch(mode5_page) {
         case 0:
-          canvas.drawString("adamecki/PWDer on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(CREDITS_PWDER_GITHUB, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 1:
-          canvas.drawString("floriano.uk", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(CREDITS_WEBSITE_LINK, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
-          canvas.drawString("josephpal/esp32-Encrypt on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(CREDITS_AES128_GITHUB, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
-          canvas.drawString("lucadentella/TOTP-Arduino on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(CREDITS_TOTP_GITHUB, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
-          canvas.drawString("dirkx/Arduino-Base32-Decode on GitHub", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
+          canvas.drawString(CREDITS_BASE32_GITHUB, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
       }
-      
-      canvas.pushSprite(0, 0);
       break;
       
     case 6:
-      // icons
+      // icon
       push_icon(options, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
 
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
-      canvas.setTextDatum(middle_right);
-      canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
       canvas.setTextDatum(middle_left);
-      canvas.drawString("New passwords found", 40, 20);
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
+      canvas.drawString(PWIMPORT_TITLEBAR, 40, 20);
       
       // content
       canvas.setTextColor(BLACK);
       canvas.setTextDatum(top_center);
-      canvas.drawString("Replace current passwords?", M5Cardputer.Display.width() / 2, 50);
+      canvas.drawString(PWIMPORT_REPLACE_PASSWORDS, M5Cardputer.Display.width() / 2, 50);
       canvas.setTextDatum(bottom_center);
       canvas.drawString("[ Y / N ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-      
-      // push
-      canvas.pushSprite(0, 0);
       break;
 
     case 7:
-      // icons
+      // icon
       push_icon(search, 4, 4);
-      push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-      if(device_muted) {
-        push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      } else {
-        push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
-      }
 
-      // captions
+      // caption
       canvas.setTextColor(WHITE);
-      canvas.setTextDatum(middle_right);
+      canvas.setTextDatum(middle_left);
       if(mode7_show_results) {
-        canvas.drawString("M ->", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
-        canvas.setTextDatum(middle_left);
         canvas.drawString(mode7_query, 40, 20);
       } else {
-        canvas.setTextDatum(middle_left);
-        canvas.drawString("Search", 40, 20);
+        canvas.drawString(SEARCH_TITLEBAR, 40, 20);
       }
-      canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "% | " + String(M5Cardputer.Power.getBatteryVoltage()) + "mV", 40, M5Cardputer.Display.height() - 20);
 
       // content
       canvas.setTextColor(BLACK);
       if(mode7_show_results) {
         if(M5Cardputer.Keyboard.isKeyPressed('v') && mode7_matches > 0) {
           canvas.setTextDatum(top_center);
-          if (network_available && totp_available) {
+          if ((network_available || rtc_available) && totp_available) {
             generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
             canvas.setTextColor(BLUE);
             canvas.drawString(username[mode7_contains_searched_string[mode7_index]] + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
@@ -843,7 +812,7 @@ void drawUI() {
         } else {
           if(mode7_matches > 0) {
             canvas.setTextDatum(top_center);
-            if(network_available && totp_available) {
+            if((network_available || rtc_available) && totp_available) {
               canvas.setTextColor(BLUE);
             }
             canvas.drawString(title[mode7_contains_searched_string[mode7_index]], M5Cardputer.Display.width() / 2, 50);
@@ -852,7 +821,7 @@ void drawUI() {
           canvas.setTextDatum(bottom_center);
           if(mode7_matches == 0) {
             canvas.setTextDatum(middle_center);
-            canvas.drawString("No results", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
+            canvas.drawString(SEARCH_NO_RESULTS, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
           } else if(mode7_matches == 1) {
             canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           } else {
@@ -871,14 +840,40 @@ void drawUI() {
         canvas.setTextDatum(middle_center);
         canvas.drawString(mode7_query + "_", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() / 2);
       }
-
-      // push
-      canvas.pushSprite(0, 0);
       break;
       
     default:
       break;
   }
+
+  // the mostly unchanging rest of the UI
+  push_icon(battery, 4, M5Cardputer.Display.height() - 36);
+  if(device_muted && device_mode != 1) {
+    push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+  } else if (device_muted == false && device_mode != 1) {
+    push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+  }
+  if(network_available && rtc_available) {
+    push_icon(clockicon, M5Cardputer.Display.width() - 72, 4);
+    push_icon(network, M5Cardputer.Display.width() - 36, 4);
+  } else if (network_available) {
+    push_icon(network, M5Cardputer.Display.width() - 36, 4);
+  } else if (rtc_available) {
+    push_icon(clockicon, M5Cardputer.Display.width() - 36, 4);
+  }
+
+  canvas.setTextColor(WHITE);
+  canvas.setTextDatum(middle_right);
+  if(device_mode != 1) {
+    if(!(device_mode == 7 && mode7_show_results == false)) {
+      canvas.drawString("M ", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
+    }
+  }
+
+  canvas.setTextDatum(middle_left);
+  canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "%", 40, M5Cardputer.Display.height() - 20);
+
+  canvas.pushSprite(0, 0);
 }
 
 void setup() {
@@ -903,11 +898,11 @@ void setup() {
     push_icon(error, 4, 4);
 
     canvas.setTextDatum(middle_left);
-    canvas.drawString("Error", 40, 20);
+    canvas.drawString(SDCARD_NOT_FOUND_TITLE, 40, 20);
     
     canvas.setTextColor(BLACK);
     canvas.setTextDatum(top_center);
-    canvas.drawString("SD card not found!", M5Cardputer.Display.width() / 2, 50);
+    canvas.drawString(SDCARD_NOT_FOUND_DESCRIPTION, M5Cardputer.Display.width() / 2, 50);
 
     canvas.pushSprite(0, 0);
 
@@ -1038,10 +1033,10 @@ void setup() {
         
         canvas.setTextColor(RED);
         canvas.setTextDatum(top_center);
-        canvas.drawString("Vault integrity check failed.", M5Cardputer.Display.width() / 2, 9);
-        canvas.drawString("Its files might have been altered.", M5Cardputer.Display.width() / 2, 43);
-        canvas.drawString("Please import passwords again", M5Cardputer.Display.width() / 2, 77);
-        canvas.drawString("or back up your vault.", M5Cardputer.Display.width() / 2, 111);
+        canvas.drawString(INTEGRITY_CHECK_FAILED_LINE1, M5Cardputer.Display.width() / 2, 9);
+        canvas.drawString(INTEGRITY_CHECK_FAILED_LINE2, M5Cardputer.Display.width() / 2, 43);
+        canvas.drawString(INTEGRITY_CHECK_FAILED_LINE3, M5Cardputer.Display.width() / 2, 77);
+        canvas.drawString(INTEGRITY_CHECK_FAILED_LINE4, M5Cardputer.Display.width() / 2, 111);
         canvas.pushSprite(0, 0);
 
         while(1);
@@ -1133,27 +1128,27 @@ void setup() {
 
     // If no passwords are present
     if(mode0_max < 1) {
-      String default_secret_file = mode1_devicepassword + String('\n') + "Sample Entry" + String('\n') + "sample_user" + String('\n') + "sample_password" + String('\n');
+      String default_secret_file = mode1_devicepassword + String('\n') + SAMPLE_ENTRY + String('\n') + SAMPLE_USERNAME + String('\n') + SAMPLE_PASSWORD + String('\n');
       File secret_file = SD.open(SECRET_FILE_PATH, FILE_WRITE);
       secret_file.print(cipher->encryptString(default_secret_file));
       secret_file.close();
   
-      title[0] = "Sample Entry";
-      username[0] = "sample_user";
-      password[0] = "sample_password";
+      title[0] = SAMPLE_ENTRY;
+      username[0] = SAMPLE_USERNAME;
+      password[0] = SAMPLE_PASSWORD;
   
       mode0_max = 1;
     }
   } else {
     // If a secret file does not exist
-    String default_secret_file = mode1_devicepassword + String('\n') + "Sample Entry" + String('\n') + "sample_user" + String('\n') + "sample_password" + String('\n');
+    String default_secret_file = mode1_devicepassword + String('\n') + SAMPLE_ENTRY + String('\n') + SAMPLE_USERNAME + String('\n') + SAMPLE_PASSWORD + String('\n');
     File secret_file = SD.open(SECRET_FILE_PATH, FILE_WRITE);
     secret_file.print(cipher->encryptString(default_secret_file));
     secret_file.close();
 
-    title[0] = "Sample Entry";
-    username[0] = "sample_user";
-    password[0] = "sample_password";
+    title[0] = SAMPLE_ENTRY;
+    username[0] = SAMPLE_USERNAME;
+    password[0] = SAMPLE_PASSWORD;
 
     mode0_max = 1;
   }
@@ -1162,8 +1157,15 @@ void setup() {
   Keyboard.begin();
   USB.begin();
 
-  // start Wi-Fi connection
-  retry_connection();
+  // try getting time
+  setenv("TZ", "UTCO", 1);
+  tzset();
+
+  rtc_available = start_rtc();
+  if(!rtc_available) {
+    // start Wi-Fi connection
+    retry_connection();
+  }
   
   // check for first TOTP
   if(totp_secret[mode0_selection] != "") {totp_available = true;}
@@ -1174,6 +1176,12 @@ void setup() {
 void loop() {
   // mostly keyboard input
   M5Cardputer.update();
+
+  if(WiFi.status() == WL_CONNECTED && network_available == false) {
+    network_available = true;
+  } else if (WiFi.status() != WL_CONNECTED && network_available == true) {
+    network_available = false;
+  }
 
   if(M5Cardputer.Keyboard.isChange()) {
     if(mode0_wasVPressed && (device_mode == 0 || device_mode == 7)) {
@@ -1290,7 +1298,7 @@ void loop() {
             delay(25);
             Keyboard.releaseAll();
           } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
-            if(network_available && totp_available) {
+            if((network_available || rtc_available) && totp_available) {
               generate_totp(totp_secret[mode0_selection]);
               for(int i = 0; i < 6; i++) {
                 Keyboard.press(totp_buffer[i]);
@@ -1696,7 +1704,7 @@ void loop() {
               delay(25);
               Keyboard.releaseAll();
             } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
-              if(network_available && totp_available) {
+              if((network_available || rtc_available) && totp_available) {
                 generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
                 for(int i = 0; i < 6; i++) {
                   Keyboard.press(totp_buffer[i]);
