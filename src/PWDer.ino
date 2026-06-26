@@ -19,13 +19,6 @@
 // #define lang_pl
 #include "ui_strings.h"
 
-M5Canvas canvas(&M5Cardputer.Display);
-USBHIDKeyboard Keyboard;
-
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP); // change to modifiable ntp server later
-Unit_RTC RTC;
-
 #define SD_CS_PIN 12
 #define SD_MOSI_PIN 14
 #define SD_MISO_PIN 39
@@ -38,6 +31,12 @@ Unit_RTC RTC;
 #define IMPORT_FILE_PATH "/pwimport"
 #define EXPORT_FILE_PATH "/pwexport"
 
+M5Canvas canvas(&M5Cardputer.Display);
+USBHIDKeyboard Keyboard;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP); // change to modifiable ntp server later
+Unit_RTC RTC;
+
 int wifi_timeout_seconds = 5; // Default value if config file is not readable
 
 // variables with no value will be imported from files
@@ -47,16 +46,19 @@ String hostname;
 String httpport;
 
 // totp state variables
+bool network_available = false;
+bool totp_available = false;
+char totp_buffer[7];
 bool rtc_available = false;
 rtc_time_type rtc_time;
 rtc_date_type rtc_date;
 
-bool network_available = false;
-bool totp_available = false;
-char totp_buffer[7];
+int8_t last_battery_percentage = 0;
+int last_ui_refresh = 0; // in order to prevent screen from updating battery state too quickly
+#define UI_UPDATE_MILISECONDS 3000 // cooldown before screen updates
 
 int device_mode = 1;
-// "Device mode" determines what does drawUI() function draw and how does the device react to key presses in loop()
+// "Device mode" determines what does draw_ui() function draw and how does the device react to key presses in loop()
 // 0 - main page
 // 1 - device locked
 // 2 - help page
@@ -287,11 +289,11 @@ void read_response(NetworkClient* client, String &lines) {
     if(millis() - timeout > 5000) {
       client->stop();
       mode4_page = 5;
-      drawUI();
+      draw_ui();
       delay(3000);
       mode4_page = 0;
       device_mode = 0;
-      drawUI();
+      draw_ui();
       return;
     }
   }
@@ -313,6 +315,13 @@ bool start_rtc() {
 }
 
 void retry_connection() {
+  WiFi.disconnect(true);
+  delay(200);
+  WiFi.mode(WIFI_OFF);
+  delay(200);
+  WiFi.mode(WIFI_STA);
+  delay(200);
+
   if(wifi_timeout_seconds != 0) {
     WiFi.begin(wifissid, wifipswd);
 
@@ -343,7 +352,7 @@ void net_password_import() {
     String import_string = "";
   
     mode4_page = 1;
-    drawUI();
+    draw_ui();
   
     NetworkClient client;
     String footer = String(" HTTP/1.1\r\n") + "Host: " + String(host) + "\r\n" + "Connection: close\r\n\r\n";
@@ -351,16 +360,16 @@ void net_password_import() {
   
     if(!client.connect(host, port)) {
       mode4_page = 5;
-      drawUI();
+      draw_ui();
       delay(3000);
       mode4_page = 0;
       device_mode = 0;
-      drawUI();
+      draw_ui();
       return;
     }
   
     mode4_page = 2;
-    drawUI();
+    draw_ui();
     
     client.print(readRequest);
     read_response(&client, import_string);
@@ -392,35 +401,35 @@ void net_password_import() {
     
     if(lines_read > 7) {
       mode4_page = 3;
-      drawUI();
+      draw_ui();
       delay(3000);
       
       mode4_page = 0;
       device_mode = 6;
-      drawUI();
+      draw_ui();
     } else {
       if(SD.exists(IMPORT_FILE_PATH)) { SD.remove(IMPORT_FILE_PATH); }
       
       mode4_page = 6;
-      drawUI();
+      draw_ui();
       delay(3000);
   
       mode4_page = 0;
       device_mode = 0;
-      drawUI();
+      draw_ui();
     }
   } else {
     mode4_page = 4;
-    drawUI();
+    draw_ui();
     delay(3000);
     mode4_page = 0;
     device_mode = 0;
-    drawUI();
+    draw_ui();
     return;
   }
 }
 
-void drawUI() {
+void draw_ui() {
   String mode1_asterisks = ""; // password mask, also used in mode 3 (options) to hide Wi-Fi and device password
   
   // background
@@ -847,12 +856,14 @@ void drawUI() {
   }
 
   // the mostly unchanging rest of the UI
-  push_icon(battery, 4, M5Cardputer.Display.height() - 36);
   if(device_muted && device_mode != 1) {
     push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
   } else if (device_muted == false && device_mode != 1) {
     push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
   }
+
+  canvas.setTextColor(WHITE);
+  canvas.setTextDatum(middle_right);
   if(network_available && rtc_available) {
     push_icon(clockicon, M5Cardputer.Display.width() - 72, 4);
     push_icon(network, M5Cardputer.Display.width() - 36, 4);
@@ -861,17 +872,21 @@ void drawUI() {
   } else if (rtc_available) {
     push_icon(clockicon, M5Cardputer.Display.width() - 36, 4);
   }
-
-  canvas.setTextColor(WHITE);
-  canvas.setTextDatum(middle_right);
   if(device_mode != 1) {
+    push_icon(help, M5Cardputer.Display.width() - 108, M5Cardputer.Display.height() - 36);
     if(!(device_mode == 7 && mode7_show_results == false)) {
       canvas.drawString("M ", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
+      canvas.drawString("H ", M5Cardputer.Display.width() - 112, M5Cardputer.Display.height() - 20);
     }
   }
 
   canvas.setTextDatum(middle_left);
-  canvas.drawString(String(M5Cardputer.Power.getBatteryLevel()) + "%", 40, M5Cardputer.Display.height() - 20);
+  if(last_battery_percentage > -1) {
+    canvas.drawString(String(last_battery_percentage) + "%", 40, M5Cardputer.Display.height() - 20);
+    push_icon(battery, 4, M5Cardputer.Display.height() - 36);
+  } else {
+    push_icon(nobattery, 4, M5Cardputer.Display.height() - 36);
+  }
 
   canvas.pushSprite(0, 0);
 }
@@ -1170,12 +1185,21 @@ void setup() {
   // check for first TOTP
   if(totp_secret[mode0_selection] != "") {totp_available = true;}
 
-  drawUI();
+  last_battery_percentage = M5.Power.getBatteryLevel();
+  last_ui_refresh = millis();
+  draw_ui();
 }
 
 void loop() {
   // mostly keyboard input
   M5Cardputer.update();
+
+  int8_t current_battery_percentage = M5.Power.getBatteryLevel();
+  if((current_battery_percentage != last_battery_percentage) && millis() - last_ui_refresh > UI_UPDATE_MILISECONDS) {
+    last_battery_percentage = current_battery_percentage;
+    last_ui_refresh = millis();
+    draw_ui();
+  }  
 
   if(WiFi.status() == WL_CONNECTED && network_available == false) {
     network_available = true;
@@ -1186,7 +1210,7 @@ void loop() {
   if(M5Cardputer.Keyboard.isChange()) {
     if(mode0_wasVPressed && (device_mode == 0 || device_mode == 7)) {
       mode0_wasVPressed = false;
-      drawUI();
+      draw_ui();
     }
     
     if(M5Cardputer.Keyboard.isPressed()) {
@@ -1207,28 +1231,28 @@ void loop() {
             } else {
               save_spkstate("0");
             }
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('q')) { // search (query)
             device_mode = 7;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('h')) { // help
             device_mode = 2;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('c')) { // credits
             device_mode = 5;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('s')) { // synchronize
             device_mode = 4;
-            drawUI();
+            draw_ui();
             net_password_import();
           } else if (M5Cardputer.Keyboard.isKeyPressed('o')) { // options
             device_mode = 3;
-            drawUI();
-  //      } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {/ // retry connecting to Wi-Fi (future, now restart needed)
-  //        retry_connection();/
+            draw_ui();
+          } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {
+            retry_connection();
           } else if (M5Cardputer.Keyboard.isKeyPressed('l')) { // lock
             device_mode = 1;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
             if(mode0_inputtype == 0 || mode0_inputtype == 2) {
               for (int i = 0; i < username[mode0_selection].length(); i++) {
@@ -1319,13 +1343,13 @@ void loop() {
           } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode0_selection < mode0_max - 1) { // next password
             mode0_selection++;
             if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode0_selection > 0) { // previous password
             mode0_selection--;
             if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('v')) {
-            drawUI();
+            draw_ui();
             mode0_wasVPressed = true;
           }
           break;
@@ -1336,18 +1360,18 @@ void loop() {
             mode1_ispasswordbeingchanged = false;
             mode1_ispasswordbeingexported = false;
             mode1_passwordinput = "";
-            drawUI();
+            draw_ui();
             push_icon(error, 4, 4);
             canvas.pushSprite(0, 0);
           } else {
             for(auto i : status.word) {
               mode1_passwordinput += i;
-              drawUI();
+              draw_ui();
             }
   
             if(status.del) {
               mode1_passwordinput.remove(mode1_passwordinput.length() - 1);
-              drawUI();
+              draw_ui();
             }
   
             if(status.enter) {
@@ -1372,11 +1396,11 @@ void loop() {
                   } else if(mode1_ispasswordbeingexported) {
                     export_passwords();
                   }
-                  drawUI();
+                  draw_ui();
                   push_icon(ok, 4, 4);
                 } else {
                   device_mode = 3;
-                  drawUI();
+                  draw_ui();
                   push_icon(error, 4, 4);
                 }
 
@@ -1395,10 +1419,10 @@ void loop() {
                       device_mode = 0;
                     }
                   mode1_passwordinput = "";
-                  drawUI();
+                  draw_ui();
                 } else {
                   mode1_passwordinput = "";
-                  drawUI();
+                  draw_ui();
                 }
               }
             }
@@ -1408,13 +1432,13 @@ void loop() {
         case 2:
           if(M5Cardputer.Keyboard.isKeyPressed('`')) {
             device_mode = 0;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode2_page > 0) {
             mode2_page--;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode2_page < 4) {
             mode2_page++;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('m')) {
             device_muted = !device_muted;
             if(!device_muted){
@@ -1422,10 +1446,10 @@ void loop() {
             } else {
               save_spkstate("0");
             }
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('l')) {
             device_mode = 1;
-            drawUI();
+            draw_ui();
           }
           break;
           
@@ -1438,13 +1462,13 @@ void loop() {
             mode3_tempdpwd = mode1_devicepassword;
             
             device_mode = 0;
-            drawUI();
+            draw_ui();
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed(',') && mode3_page > 0) {
             mode3_page--;
-            drawUI();  
+            draw_ui();  
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page < 7) {
             mode3_page++;
-            drawUI();
+            draw_ui();
           } else {
             for(auto i : status.word) {
               switch(mode3_page) {
@@ -1466,7 +1490,7 @@ void loop() {
                 default:
                   break;
               }
-              drawUI();
+              draw_ui();
             }
   
             if(status.del) {
@@ -1489,7 +1513,7 @@ void loop() {
                 default:
                   break;
               }
-              drawUI();
+              draw_ui();
             }
   
             if(status.enter) {
@@ -1506,7 +1530,7 @@ void loop() {
                       mode0_inputtype = 0;
                       break;
                   }
-                  drawUI();
+                  draw_ui();
                   break;
                 case 1:
                   wifissid = mode3_tempssid;
@@ -1523,7 +1547,7 @@ void loop() {
                 case 5:
                   mode1_ispasswordbeingchanged = true;
                   device_mode = 1;
-                  drawUI();
+                  draw_ui();
                   break;
                 case 6:
                   if(wifi_timeout_seconds < 15) {
@@ -1535,14 +1559,14 @@ void loop() {
                 case 7:
                   mode1_ispasswordbeingexported = true;
                   device_mode = 1;
-                  drawUI();
+                  draw_ui();
                   break;
                 default:
                   break;
               }
               if(!(mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported)) {
                 save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword, String(wifi_timeout_seconds));
-                drawUI();
+                draw_ui();
                 push_icon(ok, 4, 4);
                 canvas.pushSprite(0, 0);
               }
@@ -1558,10 +1582,10 @@ void loop() {
             } else {
               save_spkstate("0");
             }
-            drawUI();
+            draw_ui();
           } else if(M5Cardputer.Keyboard.isKeyPressed('`')) {
             device_mode = 0;
-            drawUI(); 
+            draw_ui(); 
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
             for (int i = 0; i < mode5_interactive_hyperlinks[mode5_page].length(); i++) {
               Keyboard.press(mode5_interactive_hyperlinks[mode5_page][i]);
@@ -1571,10 +1595,10 @@ void loop() {
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 4) { // next page
             mode5_page++;
-            drawUI();
+            draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode5_page > 0) { // previous page
             mode5_page--;
-            drawUI();
+            draw_ui();
           }
           break;
           
@@ -1586,15 +1610,15 @@ void loop() {
             } else {
               save_spkstate("0");
             }
-            drawUI();
+            draw_ui();
           } else if(M5Cardputer.Keyboard.isKeyPressed('y')) {
             file_password_import();
             device_mode = 0;
-            drawUI();
+            draw_ui();
           } else if(M5Cardputer.Keyboard.isKeyPressed('n')) {
             SD.remove(IMPORT_FILE_PATH);
             device_mode = 0;
-            drawUI();
+            draw_ui();
           }
           break;
 
@@ -1603,19 +1627,19 @@ void loop() {
             if (M5Cardputer.Keyboard.isKeyPressed('/') && mode7_index < mode7_matches - 1) { // next password
               mode7_index++;
               if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
-              drawUI();
+              draw_ui();
             } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode7_index > 0) { // previous password
               mode7_index--;
               if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
-              drawUI();
+              draw_ui();
             } else if(M5Cardputer.Keyboard.isKeyPressed('`')) {
               mode7_matches = 0;
               mode7_index = 0;
               mode7_show_results = false;
-              drawUI();
+              draw_ui();
             } else if(M5Cardputer.Keyboard.isKeyPressed('l')) {
               device_mode = 1;
-              drawUI();
+              draw_ui();
             } else if(M5Cardputer.Keyboard.isKeyPressed('m')) {
               device_muted = !device_muted;
               if(!device_muted){
@@ -1623,7 +1647,7 @@ void loop() {
               } else {
                 save_spkstate("0");
               }
-              drawUI();
+              draw_ui();
             } else if(M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
               Keyboard.press(KEY_TAB);
               delay(25);
@@ -1633,7 +1657,7 @@ void loop() {
               delay(25);
               Keyboard.releaseAll();
             } else if(M5Cardputer.Keyboard.isKeyPressed('v')) {
-              drawUI();
+              draw_ui();
               mode0_wasVPressed = true;
             } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
               if(mode0_inputtype == 0 || mode0_inputtype == 2) {
@@ -1719,16 +1743,16 @@ void loop() {
             if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
               device_mode = 0;
               if(totp_secret[mode0_selection] != "") {totp_available = true;} else {totp_available = false;}
-              drawUI();
+              draw_ui();
             } else {
               for(auto i : status.word) {
                 mode7_query += i;
-                drawUI();
+                draw_ui();
               }
     
               if(status.del) {
                 mode7_query.remove(mode7_query.length() - 1);
-                drawUI();
+                draw_ui();
               }
     
               if(status.enter) {
@@ -1748,7 +1772,7 @@ void loop() {
                   
                   mode7_show_results = true;
                   if(totp_secret[mode7_contains_searched_string[mode7_index]] != "") {totp_available = true;} else {totp_available = false;}
-                  drawUI();
+                  draw_ui();
                 }
               }
             }
