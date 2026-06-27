@@ -85,6 +85,7 @@ Press the arrow keys to navigate, and hold down V to preview the username and pa
 - `M` - mute or unmute the speaker. The default state for the speaker is muted.
 - `L` - lock the device. Alternatively, you can just reset the device.
 - `S` - attempt to synchronize the passwords over the network.
+- `N` - connect (or reconnect) Wi-Fi, usually after changing Wi-Fi settings in Options.
 - `O` - open Options.
 - `C` - open Credits.
 - `Q` - open Search menu (press Fn+Esc to exit)
@@ -127,7 +128,7 @@ Here you have to enter the correct password (then press OK) to access the device
 <img src="./photos/lock.webp" alt="lock" width="40%">
 
 ## Help screen
-A help screen is a quick and complex guide to all the keybindings. Press the arrow keys / esc to navigate.
+A help screen is a quick guide to all the keybindings. Press the arrow keys / esc to navigate.
 
 <img src="./photos/help.webp" alt="help" width="40%">
 
@@ -140,7 +141,7 @@ Press enter to switch between default password input modes.
 
 <img src="./photos/opts2.webp" alt="opts2" width="40%">
 
-On pages that require complex typing (so basically anything else than switching the default password input mode), you need to hold FN when pressing arrow keys / esc to navigate. On the photo above you can see the little tick mark in the top left corner - it means that the setting has been saved.
+On pages that require typing, you need to hold FN when pressing arrow keys / esc to navigate. On the photo above you can see the little tick mark in the top left corner - it means that the setting has been saved.
 
 <img src="./photos/opts3.webp" alt="opts3" width="40%">
 
@@ -195,7 +196,6 @@ While data stored on the device is encrypted, the import file and network synchr
 # Roadmap
 In future versions, I plan to include these features:
 - Manual password adding
-- Exporting passwords from the device
 - Encrypted password importing and synchronizing over network
 - Encryption key stored in Cardputer's non-volatile memory instead of the program, and the ability to randomize/change it from options screen
 # Credits
