@@ -1,3 +1,4 @@
+// English
 #ifdef lang_en
 #define PASSWORD_MANAGER_TITLEBAR "Passwords"
 #define LOGIN_TITLEBAR "Enter password"
@@ -38,6 +39,9 @@
 #define OPTIONS_WIFI_OFF "Wi-Fi timeout: Wi-Fi Off"
 #define OPTIONS_WIFI_TIMEOUT "Wi-Fi timeout: "
 #define OPTIONS_WIFI_TIMEOUT_SECONDS_SHORTCUT " s"
+#define OPTIONS_RTC_TIME "RTC Time: "
+#define OPTIONS_RTC_NTPSYNC " | Sync w/ NTP"
+#define OPTIONS_RTC_NTPSYNC_RTC_UNAVAILABLE "Sync unavailable: No RTC"
 #define OPTIONS_EXPORT_VAULT "ENTER to export vault to SD"
 
 #define SYNC_WIFI_CONNECTING_PHASE "Connecting to Wi-Fi"
@@ -78,6 +82,7 @@
 #define SAMPLE_PASSWORD "sample_password"
 #endif
 
+// Polish
 #ifdef lang_pl
 #define PASSWORD_MANAGER_TITLEBAR "Moje hasla"
 #define LOGIN_TITLEBAR "Podaj haslo"
@@ -118,6 +123,9 @@
 #define OPTIONS_WIFI_OFF "Przedaw. proby polacz. Wi-Fi wylaczone"
 #define OPTIONS_WIFI_TIMEOUT "Przedawnienie proby polaczenia: "
 #define OPTIONS_WIFI_TIMEOUT_SECONDS_SHORTCUT " s"
+#define OPTIONS_RTC_TIME "Czas RTC: "
+#define OPTIONS_RTC_NTPSYNC " | Sync. z NTP"
+#define OPTIONS_RTC_NTPSYNC_RTC_UNAVAILABLE "Sync. niedostepna: Brak RTC"
 #define OPTIONS_EXPORT_VAULT "ENTER: eksportuj sejf na karte pamieci"
 
 #define SYNC_WIFI_CONNECTING_PHASE "Laczenie z Wi-Fi"

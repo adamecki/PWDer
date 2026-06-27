@@ -81,6 +81,7 @@ bool mode1_ispasswordbeingexported = false;
 
 int mode2_page = 0;
 
+#define MODE3_PAGES_NUMBER 9
 int mode3_page = 0;
 // 0 - default password input mode
 // 1 - ssid
@@ -88,6 +89,11 @@ int mode3_page = 0;
 // 3 - ip
 // 4 - port
 // 5 - devpwd
+// 6 - wifi timeout
+// * - ntp server
+// 7 - ntp time sync
+// * - manual rtc clock configuration
+// 8 - export vault
 String mode3_tempssid = "";
 String mode3_tempwpwd = "";
 String mode3_tempaddr = "";
@@ -139,6 +145,13 @@ unsigned long to_unix_utc_timestamp(int year, int month, int day, int hour, int 
   time_t result = mktime(&t);
   if (result == -1) { return -1; }
   return (long)result;
+}
+
+struct tm to_regular_utc_timestamp(unsigned long epoch) {
+  time_t timestamp = static_cast<time_t>(epoch);
+  struct tm timeinfo;
+  gmtime_r(&timestamp, &timeinfo);
+  return timeinfo;
 }
 
 void generate_totp(String secret) {
@@ -431,6 +444,7 @@ void net_password_import() {
 
 void draw_ui() {
   String mode1_asterisks = ""; // password mask, also used in mode 3 (options) to hide Wi-Fi and device password
+  String enumerator = "";
   
   // background
   canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), NAVY);
@@ -473,7 +487,7 @@ void draw_ui() {
         if(mode0_max == 1) {
           canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
         } else {
-          String enumerator;
+          enumerator = "";
           if(mode0_selection == 0) {
             enumerator = "[ " + String(mode0_selection + 1) + " / " + String(mode0_max) + " ] >";
           } else if (mode0_selection == mode0_max - 1) {
@@ -569,9 +583,9 @@ void draw_ui() {
 
       // content
       canvas.setTextColor(BLACK);
+      canvas.setTextDatum(top_center);
       switch(mode3_page) {
         case 0:
-          canvas.setTextDatum(top_center);
           switch(mode0_inputtype) {
             case 0:
               canvas.drawString(OPTIONS_DEFAULT_USERNAME, M5Cardputer.Display.width() / 2, 50);
@@ -585,66 +599,61 @@ void draw_ui() {
             default:
               break;
           }
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("[ 1 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 1:
-          canvas.setTextDatum(top_center);
           canvas.drawString(OPTIONS_SSID + mode3_tempssid + "_", M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 2 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
-          canvas.setTextDatum(top_center);
           mode1_asterisks = "";
           for(int i = 0; i < mode3_tempwpwd.length(); i++) {
             mode1_asterisks += "*";
           }
           canvas.drawString(OPTIONS_WIFI_PASSWORD + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 3 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
-          canvas.setTextDatum(top_center);
           canvas.drawString(OPTIONS_SYNC_HOST + mode3_tempaddr + "_", M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 4 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
-          canvas.setTextDatum(top_center);
           canvas.drawString(OPTIONS_SYNC_PORT + mode3_tempport + "_", M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 5 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 5:
-          canvas.setTextDatum(top_center);
           mode1_asterisks = "";
           for(int i = 0; i < mode3_tempdpwd.length(); i++) {
             mode1_asterisks += "*";
           }
           canvas.drawString(OPTIONS_DEVICE_PASSWORD + mode1_asterisks + "_", M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 6 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 6:
-          canvas.setTextDatum(top_center);
           if(wifi_timeout_seconds == 0) {
             canvas.drawString(OPTIONS_WIFI_OFF, M5Cardputer.Display.width() / 2, 50);
           } else {
             canvas.drawString(OPTIONS_WIFI_TIMEOUT + String(wifi_timeout_seconds) + OPTIONS_WIFI_TIMEOUT_SECONDS_SHORTCUT, M5Cardputer.Display.width() / 2, 50);
           }
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 7 / 8 ] >", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 7:
-          canvas.setTextDatum(top_center);
+          if(rtc_available) {
+            RTC.getTime(&rtc_time);
+            String nice_hours = "";
+            String nice_minutes = "";
+            if(rtc_time.Hours < 10) { nice_hours = "0" + String(rtc_time.Hours); } else { nice_hours = String(rtc_time.Hours); }
+            if(rtc_time.Minutes < 10) { nice_minutes = "0" + String(rtc_time.Minutes); } else { nice_minutes = String(rtc_time.Minutes); }
+            canvas.drawString(OPTIONS_RTC_TIME + nice_hours + ":" + nice_minutes + " UTC" + OPTIONS_RTC_NTPSYNC, M5Cardputer.Display.width() / 2, 50);
+          } else {
+            canvas.drawString(OPTIONS_RTC_NTPSYNC_RTC_UNAVAILABLE, M5Cardputer.Display.width() / 2, 50);
+          }
+          break;
+        case 8:
           canvas.drawString(OPTIONS_EXPORT_VAULT, M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextDatum(bottom_center);
-          canvas.drawString("< [ 8 / 8 ] ", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         default:
           break;
       }
+      enumerator = "";
+      if(mode3_page != 0) { enumerator += "< "; }
+      enumerator += "[ " + String(mode3_page + 1) + " / " + String(MODE3_PAGES_NUMBER) + " ]";
+      if(mode3_page != MODE3_PAGES_NUMBER - 1) { enumerator += " >"; }
+      canvas.setTextDatum(bottom_center);
+      canvas.drawString(enumerator, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
       break;
 
     case 4:
@@ -672,45 +681,39 @@ void draw_ui() {
 
       // content
       canvas.setTextColor(BLACK);
+      canvas.setTextDatum(top_center);
       switch(mode4_page) {
         case 0:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_WIFI_CONNECTING_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 1 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 1:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_SERVER_CONNECTING_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 2 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 2:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_DOWNLOAD_PHASE, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString("[ 3 / 3 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 3:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_OK, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString(SYNC_RETURN, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 4:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString(SYNC_ERR_DESCRIPTION_WIFI, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 5:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString(SYNC_ERR_DESCRIPTION_SERVER, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           break;
         case 6:
-          canvas.setTextDatum(top_center);
           canvas.drawString(SYNC_ERR, M5Cardputer.Display.width() / 2, 50);
           canvas.setTextDatum(bottom_center);
           canvas.drawString(SYNC_ERR_DESCRIPTION_FILE, M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
@@ -834,7 +837,7 @@ void draw_ui() {
           } else if(mode7_matches == 1) {
             canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
           } else {
-            String enumerator;
+            enumerator = "";
             if(mode7_index == 0) {
               enumerator = "[ " + String(mode7_index + 1) + " / " + String(mode7_matches) + " ] >";
             } else if (mode7_index == mode7_matches - 1) {
@@ -1466,7 +1469,7 @@ void loop() {
           } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed(',') && mode3_page > 0) {
             mode3_page--;
             draw_ui();  
-          } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page < 7) {
+          } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('/') && mode3_page < MODE3_PAGES_NUMBER - 1) {
             mode3_page++;
             draw_ui();
           } else {
@@ -1557,6 +1560,26 @@ void loop() {
                   }
                   break;
                 case 7:
+                  if(rtc_available) {
+                    if(!network_available) { retry_connection(); }
+                    if(network_available) {
+                      timeClient.update();
+                      struct tm new_time = to_regular_utc_timestamp(timeClient.getEpochTime());
+
+                      rtc_time.Hours = new_time.tm_hour;
+                      rtc_time.Minutes = new_time.tm_min;
+                      rtc_time.Seconds = new_time.tm_sec;
+                      RTC.setTime(&rtc_time);
+
+                      rtc_date.Year = new_time.tm_year + 1900;
+                      rtc_date.Month = new_time.tm_mon + 1;
+                      rtc_date.Date = new_time.tm_mday;
+                      RTC.setDate(&rtc_date);
+                    }
+                    draw_ui();
+                  }
+                  break;
+                case 8:
                   mode1_ispasswordbeingexported = true;
                   device_mode = 1;
                   draw_ui();
