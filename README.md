@@ -26,10 +26,10 @@ It started as an idea to solve the problem of the meticulous process of logging 
 ## Step 1: Preparing the SD card
 - Format an SD card using the **FAT32** file system
 ## Step 2: Installing PWDer on the Cardputer
-- Set up an Arduino IDE for [programming the Cardputer](https://docs.m5stack.com/en/arduino/m5cardputer/program)
-- Download the source code and open the `PWDer.ino` file with Arduino IDE
-- Open up `enckey.cpp` and set the value of `char* enckey` to a set of 16 random lowercase letters
-- Flash the program onto the Cardputer or Export Compiled Program (if you're going to use Launcher) by pressing Ctrl+Alt+S
+- Set up [PlatformIO](https://platformio.org/install).
+- Download the source code and open its directory in PlatformIO. The IDE should pull required libraries automatically.
+- Open `enckey.cpp` and set the value of `char* enckey` to a set of 16 random lowercase letters.
+- Build the program and either upload it to the device or find its binary (`PROJECT_DIR/pio/build/m5stack-stamps3/firmware.bin`).
 - *Optional: If you chose the second option, move the exported .bin file to the SD card*
 - Make sure the SD card is in, then turn on the Cardputer
 ## Step 3: First run
