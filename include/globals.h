@@ -13,9 +13,9 @@
 #include "TOTP.h"
 #include <Arduino.h>
 #include <Base32-Decode.h>
-#include <Cipher.h>
 #include <NTPClient.h>
 #include <Unit_RTC.h>
+#include <pvault.h>
 #include <cstdlib>
 #include <time.h>
 
@@ -31,12 +31,16 @@
 #define SD_CLK_PIN 40
 
 // File paths
-#define PWDER_DIR_PATH "/pwder"
-#define SPKSTATE_FILE_PATH "/pwder/spkstate"
-#define CONFIG_FILE_PATH "/pwder/config"
-#define SECRET_FILE_PATH "/pwder/secret"
+#define VAULT_PATH "/pwder.pvault"
 #define IMPORT_FILE_PATH "/pwimport"
 #define EXPORT_FILE_PATH "/pwexport"
+
+// default configuration values
+#define DEFAULT_PASSWORD "default"
+#define DEFAULT_SSID "sample"
+#define DEFAULT_WIFI_PASSWORD "password"
+#define DEFAULT_SYNCHOST "192.168.1.100"
+#define DEFAULT_SYNCPORT "7305"
 
 // UI definitions
 #define UI_UPDATE_MILISECONDS 3000

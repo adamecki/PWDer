@@ -1,6 +1,5 @@
 #include "globals.h"
 
-#include "enckey.h"
 #include "file_operations.h"
 #include "gui.h"
 #include "keyboard_handler.h"
@@ -14,12 +13,9 @@ NTPClient timeClient(ntpUDP);
 Unit_RTC RTC;
 SPIClass sdcardSPI;
 
-int wifi_timeout_seconds;
-
-String wifissid;
-String wifipswd;
-String hostname;
-String httpport;
+pvault::vault entries{};
+pvault::device_settings configuration{};
+uint8_t aes_key[pvault::key_size];
 
 bool network_available = false;
 bool totp_available = false;
@@ -41,17 +37,12 @@ int device_mode = 1;
 // 5 - credits page
 // 6 - file import page
 // 7 - search
-bool device_muted;
 
-int mode0_inputtype;
-int mode0_selection = 0;
-int mode0_max = 0;
+int mode0_selection = 1;
 bool mode0_preview = false;
 
-String mode1_devicepassword;
 String mode1_passwordinput = "";
 bool mode1_ispasswordbeingchanged = false;
-bool mode1_ispasswordbeingexported = false;
 
 int mode2_page = 0;
 
@@ -78,17 +69,10 @@ int mode4_page = 0;
 int mode5_page = 0;
 
 String mode7_query = "";
-int mode7_contains_searched_string[100];
+int mode7_matchindex[100];
 int mode7_index = 0;
 int mode7_matches = 0;
 bool mode7_show_results = false;
-
-String title[100];
-String username[100];
-String password[100];
-String totp_secret[100];
-
-Cipher* cipher = new Cipher();
 
 void setup() {
   auto cfg = M5.config();
@@ -100,9 +84,6 @@ void setup() {
   canvas.setTextColor(WHITE);
   canvas.setTextSize(1);
 
-  // set up encryption
-  cipher->setKey(enckey);
-
   // start sdcard
   sdcardSPI.begin(SD_CLK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
   if (!SD.begin(SD_CS_PIN, sdcardSPI)) {
@@ -112,49 +93,21 @@ void setup() {
     while (1);
   }
 
-  // check if files exist on sdcard
-  // if they don't exist - create them and add sample data
-  // if they exist - import data
+  // read config or write a sample
+  if(!SD.exists(VAULT_PATH)) {
+    init_new_vault();
+  } else {
+    pvault::read_config(VAULT_PATH, configuration);
+  }
 
-  // remove export file every run for safety
-  if (SD.exists(EXPORT_FILE_PATH)) {
+  if(SD.exists(EXPORT_FILE_PATH)) {
     SD.remove(EXPORT_FILE_PATH);
   }
 
-  if (!SD.exists(PWDER_DIR_PATH)) {
-    SD.mkdir(PWDER_DIR_PATH);
-  }
-
-  // spkstate
-  if (SD.exists(SPKSTATE_FILE_PATH)) {
-    read_spkstate();
-  } else {
-    save_spkstate();
-    device_muted = true;
-  }
-
-  // config
-  if (SD.exists(CONFIG_FILE_PATH)) {
-    read_and_verify_config();
-  } else {
-    if (SD.exists(SECRET_FILE_PATH)) {
-      SD.remove(SECRET_FILE_PATH);
-    }
-    init_sample_config();
-  }
-
-  mode3_tempssid = wifissid;
-  mode3_tempwpwd = wifipswd;
-  mode3_tempaddr = hostname;
-  mode3_tempport = httpport;
-  mode3_tempdpwd = mode1_devicepassword;
-
-  // secret
-  if (SD.exists(SECRET_FILE_PATH)) {
-    read_and_verify_secret();
-  } else {
-    init_sample_secret();
-  }
+  mode3_tempssid = entries.credentials[0].title;
+  mode3_tempwpwd = entries.credentials[0].username;
+  mode3_tempaddr = entries.credentials[0].password;
+  mode3_tempport = entries.credentials[0].totp_secret;
 
   // start keyboard
   Keyboard.begin();
@@ -168,11 +121,6 @@ void setup() {
   if (!rtc_available) {
     // start Wi-Fi connection
     retry_connection(false);
-  }
-
-  // check for first TOTP
-  if (totp_secret[mode0_selection] != "") {
-    totp_available = true;
   }
 
   last_battery_percentage = M5.Power.getBatteryLevel();

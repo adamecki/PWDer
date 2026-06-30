@@ -1,15 +1,13 @@
 #include "globals.h"
 #include "gui.h"
 
-extern int mode4_page;
-extern int device_mode;
-extern int wifi_timeout_seconds;
-extern String wifissid;
-extern String wifipswd;
-extern bool network_available;
 extern NTPClient timeClient;
-extern String hostname;
-extern String httpport;
+extern bool network_available;
+extern int device_mode;
+extern int mode4_page;
+
+extern pvault::vault entries;
+extern pvault::device_settings configuration;
 
 void read_response(WiFiClient* client, String& lines) {
   unsigned long timeout = millis();
@@ -41,22 +39,22 @@ void retry_connection(bool reconnect = true) {
     delay(100);
   }
 
-  if (wifi_timeout_seconds != 0) {
-    WiFi.begin(wifissid, wifipswd);
+  if (configuration.wifi_timeout != 0) {
+    WiFi.begin(entries.credentials[0].title, entries.credentials[0].username);
 
     int timeout_500ms = 0;
 
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       timeout_500ms++;
-      if (timeout_500ms >= (2 * wifi_timeout_seconds)) {
+      if (timeout_500ms >= (2 * configuration.wifi_timeout)) {
         break;
       }
     }
 
     network_available = false;
 
-    if (timeout_500ms < (2 * wifi_timeout_seconds)) {
+    if (timeout_500ms < (2 * configuration.wifi_timeout)) {
       network_available = true;
       timeClient.begin();
     }
@@ -65,8 +63,8 @@ void retry_connection(bool reconnect = true) {
 
 void net_password_import() {
   if (network_available) {
-    const char* host = hostname.c_str();
-    const int port = httpport.toInt();
+    const char* host = entries.credentials[0].password;
+    const int port = (int)entries.credentials[0].totp_secret;
 
     String import_string = "";
 

@@ -10,34 +10,26 @@ extern USBHIDKeyboard Keyboard;
 extern M5Canvas canvas;
 extern NTPClient timeClient;
 extern Unit_RTC RTC;
-extern Cipher* cipher;
 extern rtc_time_type rtc_time;
 extern rtc_date_type rtc_date;
-extern int wifi_timeout_seconds;
+
+extern pvault::vault entries;
+extern pvault::device_settings configuration;
+extern uint8_t aes_key[pvault::key_size];
+pvault::credential init_cred{};
+
 extern int device_mode;
-extern bool device_muted;
 extern bool network_available;
 extern bool rtc_available;
 extern bool totp_available;
 extern char totp_buffer[7];
-extern String wifissid;
-extern String wifipswd;
-extern String hostname;
-extern String httpport;
 
 extern bool mode0_preview;
-extern int mode0_inputtype;
 extern int mode0_selection;
-extern int mode0_max;
-extern String title[100];
-extern String username[100];
-extern String password[100];
-extern String totp_secret[100];
 
 extern bool mode1_ispasswordbeingchanged;
-extern bool mode1_ispasswordbeingexported;
+uint8_t mode1_newpassword_tempkey[pvault::key_size];
 extern String mode1_passwordinput;
-extern String mode1_devicepassword;
 
 extern int mode2_page;
 
@@ -49,16 +41,13 @@ extern String mode3_tempport;
 extern String mode3_tempdpwd;
 
 extern int mode5_page;
-const String mode5_interactive_hyperlinks[5] PROGMEM = {"https://github.com/adamecki/PWDer", "https://floriano.uk",
-                                                        "https://github.com/josephpal/esp32-Encrypt",
-                                                        "https://github.com/lucadentella/TOTP-Arduino",
-                                                        "https://github.com/dirkx/Arduino-Base32-Decode"};
+const String mode5_interactive_hyperlinks[2] PROGMEM = {"https://github.com/adamecki/PWDer", "https://floriano.uk"};
 
 extern String mode7_query;
 extern bool mode7_show_results;
 extern int mode7_index;
 extern int mode7_matches;
-extern int mode7_contains_searched_string[100];
+extern int mode7_matchindex[100];
 
 void check_keyboard_events() {
   if (M5Cardputer.Keyboard.isChange()) {
@@ -68,7 +57,7 @@ void check_keyboard_events() {
     }
 
     if (M5Cardputer.Keyboard.isPressed()) {
-      if (device_muted == false && device_mode != 1) {
+      if (configuration.speaker_on == 1 && device_mode != 1) {
         M5Cardputer.Speaker.tone(8000, 20);
       }
 
@@ -79,12 +68,13 @@ void check_keyboard_events() {
       switch (device_mode) {
       case 0:
         if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          device_muted = !device_muted;
-          if (!device_muted) {
-            save_spkstate("1");
+          if(configuration.speaker_on == 1) {
+            configuration.speaker_on = 0;
           } else {
-            save_spkstate("0");
+            configuration.speaker_on = 1;
           }
+
+          pvault::update_config(VAULT_PATH, configuration);
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('q')) { // search (query)
           device_mode = 7;
@@ -108,53 +98,53 @@ void check_keyboard_events() {
           device_mode = 1;
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
-          if (mode0_inputtype == 0 || mode0_inputtype == 2) {
-            for (int i = 0; i < username[mode0_selection].length(); i++) {
-              Keyboard.press(username[mode0_selection][i]);
+          if (configuration.input_mode == 0 || configuration.input_mode == 2) {
+            for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
             }
           }
 
-          if (mode0_inputtype == 2) {
+          if (configuration.input_mode == 2) {
             Keyboard.press(KEY_TAB);
             delay(25);
             Keyboard.releaseAll();
             delay(25);
           }
 
-          if (mode0_inputtype == 1 || mode0_inputtype == 2) {
-            for (int i = 0; i < password[mode0_selection].length(); i++) {
-              Keyboard.press(password[mode0_selection][i]);
+          if (configuration.input_mode == 1 || configuration.input_mode == 2) {
+            for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
             }
           }
 
-          if (mode0_inputtype == 2) {
+          if (configuration.input_mode == 2) {
             Keyboard.press(KEY_RETURN);
             delay(25);
             Keyboard.releaseAll();
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('1')) { // enter username
-          for (int i = 0; i < username[mode0_selection].length(); i++) {
-            Keyboard.press(username[mode0_selection][i]);
+          for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
+            Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
             delay(25);
             Keyboard.releaseAll();
             delay(25);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('2')) { // enter password
-          for (int i = 0; i < password[mode0_selection].length(); i++) {
-            Keyboard.press(password[mode0_selection][i]);
+          for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
+            Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
             delay(25);
             Keyboard.releaseAll();
             delay(25);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('3')) { // enter all
-          for (int i = 0; i < username[mode0_selection].length(); i++) {
-            Keyboard.press(username[mode0_selection][i]);
+          for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
+            Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
             delay(25);
             Keyboard.releaseAll();
             delay(25);
@@ -165,8 +155,8 @@ void check_keyboard_events() {
           Keyboard.releaseAll();
           delay(25);
 
-          for (int i = 0; i < password[mode0_selection].length(); i++) {
-            Keyboard.press(password[mode0_selection][i]);
+          for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
+            Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
             delay(25);
             Keyboard.releaseAll();
             delay(25);
@@ -177,7 +167,7 @@ void check_keyboard_events() {
           Keyboard.releaseAll();
         } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
           if ((network_available || rtc_available) && totp_available) {
-            generate_totp(totp_secret[mode0_selection]);
+            generate_totp(String(entries.credentials[mode0_selection].totp_secret));
             for (int i = 0; i < 6; i++) {
               Keyboard.press(totp_buffer[i]);
               delay(25);
@@ -194,17 +184,17 @@ void check_keyboard_events() {
           Keyboard.press(KEY_RETURN);
           delay(25);
           Keyboard.releaseAll();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode0_selection < mode0_max - 1) { // next password
+        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode0_selection < entries.credential_count) { // next password
           mode0_selection++;
-          if (totp_secret[mode0_selection] != "") {
+          if (String(entries.credentials[mode0_selection].totp_secret) != "") {
             totp_available = true;
           } else {
             totp_available = false;
           }
           draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode0_selection > 0) { // previous password
+        } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode0_selection > 1) { // previous password
           mode0_selection--;
-          if (totp_secret[mode0_selection] != "") {
+          if (String(entries.credentials[mode0_selection].totp_secret) != "") {
             totp_available = true;
           } else {
             totp_available = false;
@@ -217,11 +207,10 @@ void check_keyboard_events() {
         break;
 
       case 1:
-        if ((mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported) &&
+        if (mode1_ispasswordbeingchanged &&
             M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
           device_mode = 3;
           mode1_ispasswordbeingchanged = false;
-          mode1_ispasswordbeingexported = false;
           mode1_passwordinput = "";
           draw_ui();
           push_icon(error, 4, 4);
@@ -238,60 +227,54 @@ void check_keyboard_events() {
           }
 
           if (status.enter) {
-            if (mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported) {
-              if (mode1_passwordinput == mode1_devicepassword) {
-                device_mode = 3;
-                if (mode1_ispasswordbeingchanged) {
-                  mode1_devicepassword = mode3_tempdpwd;
-                  save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword,
-                              String(wifi_timeout_seconds));
+            // verify password
+            if(pvault::get_key(VAULT_PATH, mode1_passwordinput, mode1_newpassword_tempkey)) {
+              // password ok
+              if(mode1_ispasswordbeingchanged) {
+                // change password
+                // rewrite vault
+                pvault::init_vault(VAULT_PATH, mode3_tempdpwd, configuration, entries);
+                // obtain new key
+                memcpy(aes_key, mode1_newpassword_tempkey, pvault::key_size);
 
-                  // Update vault with new password
-                  File old_vault = SD.open(SECRET_FILE_PATH, FILE_READ);
-                  String old_vault_str = cipher->decryptString(old_vault.readString());
-                  old_vault.close();
-
-                  if (SD.exists(SECRET_FILE_PATH)) {
-                    SD.remove(SECRET_FILE_PATH);
-                  }
-
-                  File new_vault = SD.open(SECRET_FILE_PATH, FILE_WRITE);
-                  String new_vault_str = mode1_devicepassword +
-                                         old_vault_str.substring(old_vault_str.indexOf('\n', 0)); // replace first line
-                  new_vault.print(cipher->encryptString(new_vault_str));
-                  new_vault.close();
-                } else if (mode1_ispasswordbeingexported) {
-                  export_vault();
-                }
+                device_mode = 0;
                 draw_ui();
                 push_icon(ok, 4, 4);
+                canvas.pushSprite(0, 0);
               } else {
-                device_mode = 3;
-                draw_ui();
-                push_icon(error, 4, 4);
-              }
+                // unlock device
+                memcpy(aes_key, mode1_newpassword_tempkey, pvault::key_size);
+                pvault::load_vault(VAULT_PATH, aes_key, configuration, entries);
 
-              canvas.pushSprite(0, 0);
+                mode3_tempssid = String(entries.credentials[0].title);
+                mode3_tempwpwd = String(entries.credentials[0].username);
+                mode3_tempaddr = String(entries.credentials[0].password);
+                mode3_tempport = String(entries.credentials[0].totp_secret);
 
-              mode1_passwordinput = "";
-              mode1_ispasswordbeingchanged = false;
-              mode1_ispasswordbeingexported = false;
-            } else {
-              if (mode1_passwordinput == mode1_devicepassword) {
-                // after unlocking
-                // check if there are passwords to import
-                if (SD.exists(IMPORT_FILE_PATH)) {
+                if(SD.exists(IMPORT_FILE_PATH)) {
                   device_mode = 6;
                 } else {
                   device_mode = 0;
+                  if(String(entries.credentials[mode0_selection].totp_secret) != "") { totp_available = true; }
                 }
-                mode1_passwordinput = "";
+
+                draw_ui();
+              }
+            } else {
+              // wrong password
+              if(mode1_ispasswordbeingchanged) {
+                device_mode = 3;
                 draw_ui();
               } else {
                 mode1_passwordinput = "";
                 draw_ui();
               }
+              push_icon(error, 4, 4);
+              canvas.pushSprite(0, 0);
             }
+
+            mode1_passwordinput = "";
+            mode1_ispasswordbeingchanged = false;
           }
         }
         break;
@@ -307,12 +290,13 @@ void check_keyboard_events() {
           mode2_page++;
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          device_muted = !device_muted;
-          if (!device_muted) {
-            save_spkstate("1");
+          if(configuration.speaker_on == 1) {
+            configuration.speaker_on = 0;
           } else {
-            save_spkstate("0");
+            configuration.speaker_on = 1;
           }
+
+          pvault::update_config(VAULT_PATH, configuration);
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('l')) {
           device_mode = 1;
@@ -322,11 +306,11 @@ void check_keyboard_events() {
 
       case 3:
         if (M5Cardputer.Keyboard.isKeyPressed('`') && (M5Cardputer.Keyboard.isKeyPressed(KEY_FN) || mode3_page == 0)) {
-          mode3_tempssid = wifissid;
-          mode3_tempwpwd = wifipswd;
-          mode3_tempaddr = hostname;
-          mode3_tempport = httpport;
-          mode3_tempdpwd = mode1_devicepassword;
+          mode3_tempssid = String(entries.credentials[0].title);
+          mode3_tempwpwd = String(entries.credentials[0].username);
+          mode3_tempaddr = String(entries.credentials[0].password);
+          mode3_tempport = String(entries.credentials[0].totp_secret);
+          mode3_tempdpwd = "";
 
           device_mode = 0;
           draw_ui();
@@ -388,30 +372,27 @@ void check_keyboard_events() {
           if (status.enter) {
             switch (mode3_page) {
             case 0:
-              switch (mode0_inputtype) {
+              switch (configuration.input_mode) {
               case 0:
-                mode0_inputtype = 1;
+                configuration.input_mode = 1;
                 break;
               case 1:
-                mode0_inputtype = 2;
+                configuration.input_mode = 2;
                 break;
               case 2:
-                mode0_inputtype = 0;
+                configuration.input_mode = 0;
                 break;
               }
               draw_ui();
               break;
             case 1:
-              wifissid = mode3_tempssid;
-              break;
             case 2:
-              wifipswd = mode3_tempwpwd;
-              break;
             case 3:
-              hostname = mode3_tempaddr;
-              break;
             case 4:
-              httpport = mode3_tempport;
+              strncpy(init_cred.title, (char*)mode3_tempssid.c_str(), sizeof(init_cred.title));
+              strncpy(init_cred.username, (char*)mode3_tempwpwd.c_str(), sizeof(init_cred.username));
+              strncpy(init_cred.password, (char*)mode3_tempaddr.c_str(), sizeof(init_cred.password));
+              strncpy(init_cred.totp_secret, (char*)mode3_tempport.c_str(), sizeof(init_cred.totp_secret));
               break;
             case 5:
               mode1_ispasswordbeingchanged = true;
@@ -419,10 +400,10 @@ void check_keyboard_events() {
               draw_ui();
               break;
             case 6:
-              if (wifi_timeout_seconds < 15) {
-                wifi_timeout_seconds++;
+              if (configuration.wifi_timeout < 15) {
+                configuration.wifi_timeout++;
               } else {
-                wifi_timeout_seconds = 0;
+                configuration.wifi_timeout = 0;
               }
               break;
             case 7:
@@ -448,16 +429,29 @@ void check_keyboard_events() {
               }
               break;
             case 8:
-              mode1_ispasswordbeingexported = true;
-              device_mode = 1;
-              draw_ui();
+              export_vault();
+              push_icon(ok, 4, 4);
+              canvas.pushSprite(0, 0);
               break;
             default:
               break;
             }
-            if (!(mode1_ispasswordbeingchanged || mode1_ispasswordbeingexported)) {
-              save_config(String(mode0_inputtype), wifissid, wifipswd, hostname, httpport, mode1_devicepassword,
-                          String(wifi_timeout_seconds));
+            // things that need rewriting encrypted data
+            if(mode3_page == 1 || mode3_page == 2 || mode3_page == 3 || mode3_page == 4) {
+              entries.credentials[0] = init_cred;
+              pvault::update_vault(VAULT_PATH, aes_key, configuration, entries);
+              draw_ui();
+              push_icon(ok, 4, 4);
+              canvas.pushSprite(0, 0);
+            }
+            // things that need rewriting header only
+            if(mode3_page == 0 || mode3_page == 6) {
+              pvault::update_config(VAULT_PATH, configuration);
+              draw_ui();
+              push_icon(ok, 4, 4);
+              canvas.pushSprite(0, 0);
+            }
+            if(mode3_page == 7) {
               draw_ui();
               push_icon(ok, 4, 4);
               canvas.pushSprite(0, 0);
@@ -468,12 +462,13 @@ void check_keyboard_events() {
 
       case 5:
         if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          device_muted = !device_muted;
-          if (!device_muted) {
-            save_spkstate("1");
+          if(configuration.speaker_on == 1) {
+            configuration.speaker_on = 0;
           } else {
-            save_spkstate("0");
+            configuration.speaker_on = 1;
           }
+
+          pvault::update_config(VAULT_PATH, configuration);
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
           device_mode = 0;
@@ -485,7 +480,7 @@ void check_keyboard_events() {
             Keyboard.releaseAll();
             delay(25);
           }
-        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 4) { // next page
+        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 1) { // next page
           mode5_page++;
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode5_page > 0) { // previous page
@@ -496,12 +491,13 @@ void check_keyboard_events() {
 
       case 6:
         if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          device_muted = !device_muted;
-          if (!device_muted) {
-            save_spkstate("1");
+          if(configuration.speaker_on == 1) {
+            configuration.speaker_on = 0;
           } else {
-            save_spkstate("0");
+            configuration.speaker_on = 1;
           }
+
+          pvault::update_config(VAULT_PATH, configuration);
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('y')) {
           file_password_import();
@@ -518,7 +514,7 @@ void check_keyboard_events() {
         if (mode7_show_results) {
           if (M5Cardputer.Keyboard.isKeyPressed('/') && mode7_index < mode7_matches - 1) { // next password
             mode7_index++;
-            if (totp_secret[mode7_contains_searched_string[mode7_index]] != "") {
+            if (String(entries.credentials[mode7_matchindex[mode7_index]].totp_secret) != "") {
               totp_available = true;
             } else {
               totp_available = false;
@@ -526,7 +522,7 @@ void check_keyboard_events() {
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode7_index > 0) { // previous password
             mode7_index--;
-            if (totp_secret[mode7_contains_searched_string[mode7_index]] != "") {
+            if (String(entries.credentials[mode7_matchindex[mode7_index]].totp_secret) != "") {
               totp_available = true;
             } else {
               totp_available = false;
@@ -541,12 +537,13 @@ void check_keyboard_events() {
             device_mode = 1;
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-            device_muted = !device_muted;
-            if (!device_muted) {
-              save_spkstate("1");
+            if(configuration.speaker_on == 1) {
+              configuration.speaker_on = 0;
             } else {
-              save_spkstate("0");
+              configuration.speaker_on = 1;
             }
+
+            pvault::update_config(VAULT_PATH, configuration);
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
             Keyboard.press(KEY_TAB);
@@ -560,53 +557,53 @@ void check_keyboard_events() {
             draw_ui();
             mode0_preview = true;
           } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
-            if (mode0_inputtype == 0 || mode0_inputtype == 2) {
-              for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
-                Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+            if (configuration.input_mode == 0 || configuration.input_mode == 2) {
+              for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
+                Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
                 delay(25);
                 Keyboard.releaseAll();
                 delay(25);
               }
             }
 
-            if (mode0_inputtype == 2) {
+            if (configuration.input_mode == 2) {
               Keyboard.press(KEY_TAB);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
             }
 
-            if (mode0_inputtype == 1 || mode0_inputtype == 2) {
-              for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
-                Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+            if (configuration.input_mode == 1 || configuration.input_mode == 2) {
+              for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
+                Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
                 delay(25);
                 Keyboard.releaseAll();
                 delay(25);
               }
             }
 
-            if (mode0_inputtype == 2) {
+            if (configuration.input_mode == 2) {
               Keyboard.press(KEY_RETURN);
               delay(25);
               Keyboard.releaseAll();
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('1')) { // enter username
-            for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
-              Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+            for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('2')) { // enter password
-            for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
-              Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+            for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('3')) { // enter all
-            for (int i = 0; i < username[mode7_contains_searched_string[mode7_index]].length(); i++) {
-              Keyboard.press(username[mode7_contains_searched_string[mode7_index]][i]);
+            for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
@@ -617,8 +614,8 @@ void check_keyboard_events() {
             Keyboard.releaseAll();
             delay(25);
 
-            for (int i = 0; i < password[mode7_contains_searched_string[mode7_index]].length(); i++) {
-              Keyboard.press(password[mode7_contains_searched_string[mode7_index]][i]);
+            for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
+              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
               delay(25);
               Keyboard.releaseAll();
               delay(25);
@@ -629,7 +626,7 @@ void check_keyboard_events() {
             Keyboard.releaseAll();
           } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
             if ((network_available || rtc_available) && totp_available) {
-              generate_totp(totp_secret[mode7_contains_searched_string[mode7_index]]);
+              generate_totp(String(entries.credentials[mode7_matchindex[mode7_index]].totp_secret));
               for (int i = 0; i < 6; i++) {
                 Keyboard.press(totp_buffer[i]);
                 delay(25);
@@ -642,7 +639,7 @@ void check_keyboard_events() {
         } else {
           if (M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('`')) {
             device_mode = 0;
-            if (totp_secret[mode0_selection] != "") {
+            if (String(entries.credentials[mode0_selection].totp_secret) != "") {
               totp_available = true;
             } else {
               totp_available = false;
@@ -664,18 +661,18 @@ void check_keyboard_events() {
                 String lowercase_query = mode7_query;
                 lowercase_query.toLowerCase();
 
-                for (int i = 0; i < mode0_max; i++) {
-                  String lowercase_title = title[i];
+                for (int i = 1; i < entries.credential_count + 1; i++) {
+                  String lowercase_title = String(entries.credentials[i].title);
                   lowercase_title.toLowerCase();
 
                   if (lowercase_title.indexOf(lowercase_query) != -1) {
-                    mode7_contains_searched_string[mode7_matches] = i;
+                    mode7_matchindex[mode7_matches] = i;
                     mode7_matches++;
                   }
                 }
 
                 mode7_show_results = true;
-                if (totp_secret[mode7_contains_searched_string[mode7_index]] != "") {
+                if (String(entries.credentials[mode7_matchindex[mode7_index]].totp_secret) != "") {
                   totp_available = true;
                 } else {
                   totp_available = false;

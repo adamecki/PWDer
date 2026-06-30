@@ -55,15 +55,9 @@
 #define SYNC_ERR_DESCRIPTION_FILE "File error"
 
 #define CREDITS_PWDER "2026 PWDer by floriano (0.2) >"
-#define CREDITS_WEBSITE "< Visit my website! >"
-#define CREDITS_AES128 "< AES128 library >"
-#define CREDITS_TOTP "< TOTP library >"
-#define CREDITS_BASE32 "< Base32 library"
+#define CREDITS_WEBSITE "< Visit my website!"
 #define CREDITS_PWDER_GITHUB "adamecki/PWDer on GitHub"
 #define CREDITS_WEBSITE_LINK "floriano.uk"
-#define CREDITS_AES128_GITHUB "josephpal/esp32-Encrypt on GitHub"
-#define CREDITS_TOTP_GITHUB "lucadentella/TOTP-Arduino on GitHub"
-#define CREDITS_BASE32_GITHUB "dirkx/Arduino-Base32-Decode on GitHub"
 
 #define PWIMPORT_REPLACE_PASSWORDS "Replace current passwords?"
 

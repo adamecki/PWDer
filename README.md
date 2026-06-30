@@ -25,16 +25,17 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - A .kdbx database is required to import passwords into the Cardputer. Your computer also has to be able to run Python scripts. (This requirement will disappear once I add manual password entering)
 ## Step 1: Preparing the SD card
 - Format an SD card using the **FAT32** file system
-## Step 2: Installing PWDer on the Cardputer
+## Step 2a: Installing PWDer on the Cardputer (binary)
+- Download the binary from the Releases page and put it on your SD card or upload it directly to the ESP32.
+## Step 2b: Building PWDer from source
 - Set up [PlatformIO](https://platformio.org/install).
 - Download the source code and open its directory in PlatformIO. The IDE should pull required libraries automatically.
-- Open `enckey.cpp` and set the value of `char* enckey` to a set of 16 random lowercase letters.
 - Build the program and either upload it to the device or find its binary (`PROJECT_DIR/pio/build/m5stack-stamps3/firmware.bin`).
 - *Optional: If you chose the second option, move the exported .bin file to the SD card*
 - Make sure the SD card is in, then turn on the Cardputer
 ## Step 3: First run
 - If you're using launcher, install the .bin file. Otherwise, wait until the program asks for the password.
-- The first run password is "default". Enter it and press OK, you'll see the "Nothing" screen - the default and only password entry if the passwords file was nonexistent.
+- The first run password is "default". Enter it and press OK, you'll see the "Sample Entry" screen - the default and only password entry if the passwords file was nonexistent.
 ## Step 4: Importing the passwords for the first time
 - Prepare your .kdbx database
 - Open your terminal in `pwder_keepass_sync` directory
@@ -197,8 +198,6 @@ While data stored on the device is encrypted, the import file and network synchr
 In future versions, I plan to include these features:
 - Manual password adding
 - Encrypted password importing and synchronizing over network
-- Encryption key stored in Cardputer's non-volatile memory instead of the program, and the ability to randomize/change it from options screen
 # Credits
-- [ESP32-Encrypt](https://github.com/josephpal/esp32-Encrypt) - a library for AES128 encryption
 - [TOTP-Arduino](https://github.com/lucadentella/TOTP-Arduino) - a library for generating time-based one time passwords for 2FA
 - [Arduino-Base32-Decode](https://github.com/dirkx/Arduino-Base32-Decode) - a library for handling Base32
