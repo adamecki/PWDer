@@ -10,7 +10,7 @@ namespace pvault {
     constexpr uint8_t   magic_size      = 4;
     constexpr uint8_t   file_version    = 1;
 
-    constexpr uint32_t  iterations      = 2000; // increase later
+    constexpr uint32_t  iterations      = 10000;
     constexpr uint8_t   salt_size       = 16;
     constexpr uint8_t   nonce_size      = 12;
 
