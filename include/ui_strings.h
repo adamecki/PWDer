@@ -54,7 +54,7 @@
 #define SYNC_ERR_DESCRIPTION_SERVER "Server error"
 #define SYNC_ERR_DESCRIPTION_FILE "File error"
 
-#define CREDITS_PWDER "2026 PWDer by floriano (0.2) >"
+#define CREDITS_PWDER "2026 PWDer by floriano (0.4) >"
 #define CREDITS_WEBSITE "< Visit my website!"
 #define CREDITS_PWDER_GITHUB "adamecki/PWDer on GitHub"
 #define CREDITS_WEBSITE_LINK "floriano.uk"
@@ -132,7 +132,7 @@
 #define SYNC_ERR_DESCRIPTION_SERVER "Problem z serwerem"
 #define SYNC_ERR_DESCRIPTION_FILE "Problem z plikiem"
 
-#define CREDITS_PWDER "2026 PWDer od floriano (0.2) >"
+#define CREDITS_PWDER "2026 PWDer od floriano (0.4) >"
 #define CREDITS_WEBSITE "< Zobacz moja strone! >"
 #define CREDITS_AES128 "< Biblioteka AES128 >"
 #define CREDITS_TOTP "< Biblioteka TOTP >"
