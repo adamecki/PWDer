@@ -5,9 +5,11 @@
 #include "keyboard_handler.h"
 #include "network_operations.h"
 #include "time_operations.h"
+#include "pwrotocol.h"
 
 M5Canvas canvas(&M5Cardputer.Display);
 USBHIDKeyboard Keyboard;
+USBCDC USBSerialDevice;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 Unit_RTC RTC;
@@ -109,9 +111,13 @@ void setup() {
   mode3_tempaddr = entries.credentials[0].password;
   mode3_tempport = entries.credentials[0].totp_secret;
 
-  // start keyboard
-  Keyboard.begin();
+  // start keyboard and serial port
   USB.begin();
+  USBSerialDevice.begin(115200);
+  Keyboard.begin();
+
+  delay(1000);
+  USBSerialDevice.println("Serial works");
 
   // try getting time
   setenv("TZ", "UTCO", 1);
@@ -143,6 +149,9 @@ void loop() {
   } else if (WiFi.status() != WL_CONNECTED && network_available == true) {
     network_available = false;
   }
+
+  // check for serial commands
+  pwrotocol_listen_and_respond();
 
   check_keyboard_events();
 }

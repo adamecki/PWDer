@@ -11,14 +11,13 @@ and in order to not break your tongue, you can pronounce it as "Powder".
 It started as an idea to solve the problem of the meticulous process of logging into personal accounts on different public computers (like school or work), where you don't have your password manager. It simulates a USB keyboard, entering the passwords for you into every computer you plug it in to. I thought of portable / cloud password managers only when I was halfway through doing this project, so I decided to continue it.
 # Key functionalities
 - Storing up to 100 passwords using AES128 encryption
-- Protection with master password
+- Protection with master password (PBKDF2 key derivation)
 - Searching for passwords by entry name
 - Automatic password input to your computer using USB cable
-- Synchronizing with .kdbx (KeePass) files over network\* or via SD card
+- Synchronizing with .kdbx (KeePass) files over USB cable
 - Support for TOTP two-factor authentication
 - Fun, simple design
 
-\* Network transfer is not yet encrypted - its usage is highly discouraged unless you're the only user of your local network. Synchronize at your own risk.
 # Setting it up
 ## Prerequisites
 - I highly recommend using [Launcher](https://github.com/bmorcelli/Launcher) for running the program. However, it can be flashed and used directly too.
@@ -44,30 +43,26 @@ It started as an idea to solve the problem of the meticulous process of logging 
 python3 -m venv .
 source ./bin/activate
 pip install pykeepass
+pip install cryptography
+pip install pyserial
 ```
 (next time you try to use the script, just enter `source ./bin/activate`)
+- Connect the Cardputer to your computer using the USB cable (make sure PWDer is running and unlocked).
 - Run the script
 ```bash
-python3 main.py /your/database.kdbx --genfile
+python3 sync.py /your/database.kdbx
 ```
-- A `pwimport` file will appear. Move it to the root directory of your SD card and insert the card into the Cardputer.
-- Turn on or reset the Cardputer. It will prompt you to import the passwords. Press Y.
-- Otherwise, you can just create the `pwimport` file manually with following syntax
-```
-title_1
-username_1
-password_1
-otp_secret_1 (or empty if you don't have / don't want to use OTP)
-title_2
-username_2
-password_2
-otp_secret_2 (or empty)
-title_n
-username_n
-password_n
-otp_secret_n (or empty)
-```
-- This won't be possible once encrypted password importing will be implemented. Make sure `\n` (LF) is being used (and not `\r\n` (CR LF)).
+
+<img src="./photos/pyscript.webp" alt="Password synchronization script" width="40%">
+
+- The script will prompt you for both your KDBX password and PWDer password. Enter them and then press Y on the Cardputer to import your vault.
+
+<img src="./photos/import.webp" alt="Passwords found" width="40%">
+
+<b>If you're on Windows or your ESP32 doesn't show up at one of the `/dev/ttyACM` devices, change the `PWROTOCOL_SERIAL_PREFIX` in line 31 of the python script to `COM` (Windows), `/dev/ttyS` (macOS) or any other prefix your serial device might be at.</b>
+
+<b>Remember that your user should have the serial port privileges (like belonging to the `dialout` group on Linux)!</b>
+
 # Usage
 ## Main screen
 This is where you can select a password to enter.
@@ -85,7 +80,6 @@ Press the arrow keys to navigate, and hold down V to preview the username and pa
 - `R` - simulate pressing Enter on the computer.
 - `M` - mute or unmute the speaker. The default state for the speaker is muted.
 - `L` - lock the device. Alternatively, you can just reset the device.
-- `S` - attempt to synchronize the passwords over the network.
 - `N` - connect (or reconnect) Wi-Fi, usually after changing Wi-Fi settings in Options.
 - `O` - open Options.
 - `C` - open Credits.
@@ -93,7 +87,7 @@ Press the arrow keys to navigate, and hold down V to preview the username and pa
 
 ## TOTP
 ### Introduction
-PWDer now supports two-factor authentication using six-digit one time password.
+PWDer supports two-factor authentication using six-digit one time password.
 
 Neither ESP32, nor Cardputer do have an RTC backup battery to keep the time correct even when the device is powered off. Currently, there are two options to use time-based one-time passwords with PWDer.
 
@@ -164,40 +158,19 @@ Pressing enter will make a `pwexport` file appear in the root directory of your 
 
 After changing a property, press Enter to save it. Additionally, after changing the device password, you'll be prompred to enter the current password. Press FN+Esc or enter an incorrect password to cancel the procedure.
 
-## Network synchronization screen
-Before accessing this screen, make sure the Wi-Fi settings in Options are set correctly and that the Python server is running, otherwise the procedure will fail. It will attempt to download the password data from the network and import it. Proceed with caution as it is not encrypted!
-
-Also, make sure network is connected. Press `n` on the main screen to connect. You will know that the network is connected by seeing the network icon in the top right corner of the screen.
-
-<img src="./photos/network.webp" alt="network" width="40%">
-
-<img src="./photos/pyscript.webp" alt="pyscript" width="40%">
-
-Hosting an unencrypted synchronization over network.
-
-<img src="./photos/sync2.webp" alt="sync2" width="40%">
-
-<img src="./photos/sync3.webp" alt="sync3" width="40%">
-
 ## Credits screen
 Press the arrow keys / esc to navigate. Pressing Enter will input the link to the selected thing (preferably to the browser).
 
 <img src="./photos/credits.webp" alt="credits" width="40%">
 
-## Password import screen
-Once Cardputer finds `/pwimport` file during startup on the SD card, this screen will be shown after entering the password. Press Y to import the passwords or N to delete the file and keep current passwords. Keep in mind that there is no appending passwords yet - when importing new passwords, everything will be overwritten with the new ones!
-
-<img src="./photos/import.webp" alt="import" width="40%">
-
 # Other languages
-- Polish is available. To change a language, recompile PWDer with `#define lang_pl` instead of default `#define lang_en` in line 18 of the file `src/PWDer.ino`.
+- Polish is available. To change a language, recompile PWDer with `#define lang_pl` instead of default `#define lang_en` in line 23 of the file `include/globals.h`.
 
-# Be careful!
-While data stored on the device is encrypted, the import file and network synchronization aren't! I highly discourage using the network synchronization feature at all.
 # Roadmap
 In future versions, I plan to include these features:
 - Manual password adding
-- Encrypted password importing and synchronizing over network
+- Wireless password synchronization via Wi-Fi
+
 # Credits
 - [TOTP-Arduino](https://github.com/lucadentella/TOTP-Arduino) - a library for generating time-based one time passwords for 2FA
 - [Arduino-Base32-Decode](https://github.com/dirkx/Arduino-Base32-Decode) - a library for handling Base32

@@ -85,10 +85,10 @@ void check_keyboard_events() {
         } else if (M5Cardputer.Keyboard.isKeyPressed('c')) { // credits
           device_mode = 5;
           draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('s')) { // synchronize
-          device_mode = 4;
-          draw_ui();
-          net_password_import();
+        // } else if (M5Cardputer.Keyboard.isKeyPressed('s')) { // synchronize (deprecated)
+        //   device_mode = 4;
+        //   draw_ui();
+        //   net_password_import();
         } else if (M5Cardputer.Keyboard.isKeyPressed('o')) { // options
           device_mode = 3;
           draw_ui();
@@ -501,6 +501,7 @@ void check_keyboard_events() {
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('y')) {
           file_password_import();
+          SD.remove(IMPORT_FILE_PATH);
           device_mode = 0;
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {

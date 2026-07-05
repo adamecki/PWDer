@@ -365,4 +365,70 @@ namespace pvault {
         
         return true;
     }
+
+    bool get_salt(
+        const char* path,
+        uint8_t* salt
+    ) {
+        if (!path) { return false; }
+
+        File file = SD.open(path, FILE_READ);
+        if(!file) { return false; }
+        header hdr{};
+        if(!pvault_cryptography::read_header(file, hdr)) {
+            file.close();
+            return false;
+        }
+
+        memcpy(salt, hdr.master_salt, pvault::salt_size);
+
+        file.close();
+        return true;
+    }
+
+    bool replace_vault(
+        const char* path,
+        const device_settings& settings,
+        
+        const uint8_t* key,
+        const uint8_t* salt,
+        const uint8_t* nonce,
+        const uint8_t* tag,
+        const uint32_t len,
+
+        const uint8_t* ciphertext
+    ) {
+        // check if current key can decrypt provided ciphertext
+        vault* dummy = new vault;
+        bool decryption = pvault_cryptography::decrypt_gcm(key, nonce, ciphertext, len, reinterpret_cast<uint8_t*>(dummy), tag);
+        delete dummy;
+
+        if(!decryption) { return false; }
+
+        // overwrite vault with provided settings 
+        header hdr{};
+
+        hdr.magic[0] = 'C';
+        hdr.magic[1] = 'R';
+        hdr.magic[2] = 'Y';
+        hdr.magic[3] = 'P';
+
+        hdr.iterations = pvault::iterations;
+        hdr.settings = settings;
+
+        hdr.ciphertext_length = len;
+        hdr.version = pvault::file_version;
+        memcpy(hdr.master_salt, salt, pvault::salt_size);
+        memcpy(hdr.nonce, nonce, pvault::nonce_size);
+
+        if(SD.exists(path)) { SD.remove(path); }
+        File file = SD.open(path, FILE_WRITE);
+        
+        pvault_cryptography::write_header(file, hdr);
+        file.write(ciphertext, len);
+        pvault_cryptography::write_tag(file, tag);
+
+        file.close();
+        return true;
+    }
 }

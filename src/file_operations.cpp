@@ -5,6 +5,8 @@ extern pvault::vault entries;
 extern pvault::device_settings configuration;
 extern uint8_t aes_key[pvault::key_size];
 
+extern USBCDC USBSerialDevice;
+
 void init_new_vault() {
   pvault::credential init_cred{};
 
@@ -34,55 +36,53 @@ void init_new_vault() {
 }
 
 void file_password_import() {
+  USBSerialDevice.println("OK");
+
+  uint8_t salt[pvault::salt_size];
+  if(!pvault::get_salt(VAULT_PATH, salt)) {
+    return;
+  }
+  
   File import_file = SD.open(IMPORT_FILE_PATH, FILE_READ);
-  pvault::credential init_cred{};
-
-  int entries_loaded = 0;
-  int linetype = 0;
-
-  while(import_file.available()) {
-    if(entries_loaded == 100) {
-      break;
-    } else {
-      String line = import_file.readStringUntil('\n');
-      switch(linetype) {
-        case 0:
-          strncpy(init_cred.title, line.c_str(), sizeof(init_cred.title));
-          break;
-        case 1:
-          strncpy(init_cred.username, line.c_str(), sizeof(init_cred.username));
-          break;
-        case 2:
-          strncpy(init_cred.password, line.c_str(), sizeof(init_cred.password));
-          break;
-        case 3:
-          strncpy(init_cred.totp_secret, line.c_str(), sizeof(init_cred.totp_secret));
-          break;
-      }
-      if(linetype == 3) {
-        linetype = 0;
-        entries_loaded++;
-        entries.credentials[entries_loaded] = init_cred;
-      } else {
-        linetype++;
-      }
-    }
+  char magic[8];
+  import_file.read(reinterpret_cast<uint8_t*>(&magic), 8);
+  if(memcmp(magic, "PWIMPORT", 8) != 0) {
+    import_file.close();
+    return;
   }
 
+  uint8_t nonce[pvault::nonce_size];
+  import_file.read(nonce, pvault::nonce_size);
+
+  uint32_t len;
+  import_file.read(reinterpret_cast<uint8_t*>(&len), sizeof(uint32_t));
+
+  uint8_t* ciphertext = new uint8_t[len];
+  import_file.read(ciphertext, len);
+
+  uint8_t tag[pvault::tag_size];
+  import_file.read(tag, pvault::tag_size);
   import_file.close();
-  if(entries_loaded != 0) {
-    pvault::credential empty_cred{};
-    // remove entries above loaded one
-    for(int i = entries_loaded + 1; i < pvault::max_entries; i++) {
-      entries.credentials[i] = empty_cred;
-    }
-    entries.credential_count = entries_loaded;
 
-    // update vault and load it
-    pvault::update_vault(VAULT_PATH, aes_key, configuration, entries);
+  if(!pvault::replace_vault(
+    VAULT_PATH,
+    configuration,
+    aes_key,
+    salt,
+    nonce,
+    tag,
+    len,
+    ciphertext
+  )) {
+    delete[] ciphertext;
+    return;
   }
 
+  delete[] ciphertext;
   SD.remove(IMPORT_FILE_PATH);
+
+  pvault::load_vault(VAULT_PATH, aes_key, configuration, entries);
+  return;
 }
 
 void export_vault() {

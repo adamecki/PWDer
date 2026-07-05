@@ -91,4 +91,19 @@ namespace pvault {
         const char* path,
         device_settings& settings
     );
+    
+    bool get_salt( // because we need to give it to the PC if we're importing passwords
+        const char* path,
+        uint8_t* salt
+    );
+    bool replace_vault(
+        const char* path,
+        const device_settings& settings,  
+        const uint8_t* key,
+        const uint8_t* salt,
+        const uint8_t* nonce,
+        const uint8_t* tag,
+        const uint32_t len,
+        const uint8_t* ciphertext
+    );
 }
