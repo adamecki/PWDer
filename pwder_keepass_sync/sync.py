@@ -28,7 +28,12 @@ MAX_LENGTH = 128
 SALT_SIZE = 16
 ITER_SIZE = 4
 
-PWROTOCOL_SERIAL_PREFIX     = "/dev/ttyACM"
+if sys.platform == "darwin":
+    PWROTOCOL_SERIAL_PREFIX = "/dev/cu"
+elif sys.platform == "win32":
+    PWROTOCOL_SERIAL_PREFIX = "COM"
+else:
+    PWROTOCOL_SERIAL_PREFIX = "/dev/ttyACM"
 
 PWROTOCOL_IMPORT_MAGIC      = "PWIMPORT"
 PWROTOCOL_HANDSHAKE_SUCCESS = b"OK"
@@ -74,12 +79,7 @@ class Vault(Structure):
 pwdstring = ''
 vault = Vault()
 
-# change to secret configuration request later
 vault.credential_count = 0
-vault.data[0].title = b"sample"
-vault.data[0].username = b"password"
-vault.data[0].password = b"192.168.0.100"
-vault.data[0].totp_secret = b"7305"
 
 def smartSubstring(prefix, suffix, value):
     if not value:
@@ -114,16 +114,16 @@ def find_pwder():
 
             pwder.reset_input_buffer()
             pwder.reset_output_buffer()
-            
+
             if reply == PWROTOCOL_HANDSHAKE_SUCCESS:
                 print(bcolors.OKGREEN + f'Found PWDer on {port.device}' + bcolors.ENDC)
                 return pwder
-            
+
             pwder.close()
-        
+
         except serial.SerialException:
             pass
-    
+
     return None
 
 ###
@@ -166,6 +166,17 @@ pwder = find_pwder()
 if pwder is None:
     print(bcolors.FAIL + "E: No PWDer found!" + bcolors.ENDC)
     exit(1)
+
+### Get config
+pwder.write(PWROTOCOL_REQUEST_CONF)
+credential_bytes = pwder.read(sizeof(Credential))
+pwder.reset_input_buffer()
+pwder.reset_output_buffer()
+credential = Credential.from_buffer_copy(credential_bytes)
+vault.data[0].title = credential.title
+vault.data[0].username = credential.username
+vault.data[0].password = credential.password
+vault.data[0].totp_secret = credential.totp_secret
 
 ### Get iteration number
 pwder.write(PWROTOCOL_GET_ITERATIONS)

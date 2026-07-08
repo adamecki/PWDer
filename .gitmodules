@@ -1,0 +1,3 @@
+[submodule "lib/Arduino-Base32-Decode"]
+	path = lib/Arduino-Base32-Decode
+	url = https://github.com/dirkx/Arduino-Base32-Decode

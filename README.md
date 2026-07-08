@@ -28,7 +28,15 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Download the binary from the Releases page and put it on your SD card or upload it directly to the ESP32.
 ## Step 2b: Building PWDer from source
 - Set up [PlatformIO](https://platformio.org/install).
-- Download the source code and open its directory in PlatformIO. The IDE should pull required libraries automatically.
+- Clone the repository
+
+```bash
+git clone https://github.com/adamecki/PWDer
+cd PWDer
+git submodule init
+```
+
+- Open cloned directory in PlatformIO. The IDE should pull required libraries automatically.
 - Build the program and either upload it to the device or find its binary (`PROJECT_DIR/pio/build/m5stack-stamps3/firmware.bin`).
 - *Optional: If you chose the second option, move the exported .bin file to the SD card*
 - Make sure the SD card is in, then turn on the Cardputer
@@ -39,18 +47,33 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Prepare your .kdbx database
 - Open your terminal in `pwder_keepass_sync` directory
 - Create a Python virtual environment and install dependencies
+
+macOS / Linux:
 ```bash
 python3 -m venv .
 source ./bin/activate
-pip install pykeepass
-pip install cryptography
-pip install pyserial
+pip install cryptography pykeepass pyserial
 ```
-(next time you try to use the script, just enter `source ./bin/activate`)
+
+Windows:
+```cmd
+python -m venv .
+Scripts\activate.bat
+pip install cryptography pykeepass pyserial
+```
+
+(next time you try to use the script, just enter `source ./bin/activate` or `Scripts\activate.bat`)
 - Connect the Cardputer to your computer using the USB cable (make sure PWDer is running and unlocked).
 - Run the script
+
+macOS / Linux:
 ```bash
 python3 sync.py /your/database.kdbx
+```
+
+Windows:
+```cmd
+python sync.py C:\your\database.kdbx
 ```
 
 <img src="./photos/pyscript.webp" alt="Password synchronization script" width="40%">
@@ -58,8 +81,6 @@ python3 sync.py /your/database.kdbx
 - The script will prompt you for both your KDBX password and PWDer password. Enter them and then press Y on the Cardputer to import your vault.
 
 <img src="./photos/import.webp" alt="Passwords found" width="40%">
-
-<b>If you're on Windows or your ESP32 doesn't show up at one of the `/dev/ttyACM` devices, change the `PWROTOCOL_SERIAL_PREFIX` in line 31 of the python script to `COM` (Windows), `/dev/ttyS` (macOS) or any other prefix your serial device might be at.</b>
 
 <b>Remember that your user should have the serial port privileges (like belonging to the `dialout` group on Linux)!</b>
 
@@ -170,7 +191,3 @@ Press the arrow keys / esc to navigate. Pressing Enter will input the link to th
 In future versions, I plan to include these features:
 - Manual password adding
 - Wireless password synchronization via Wi-Fi
-
-# Credits
-- [TOTP-Arduino](https://github.com/lucadentella/TOTP-Arduino) - a library for generating time-based one time passwords for 2FA
-- [Arduino-Base32-Decode](https://github.com/dirkx/Arduino-Base32-Decode) - a library for handling Base32
