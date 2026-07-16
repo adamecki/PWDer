@@ -2,13 +2,13 @@
 
 #include "file_operations.h"
 #include "gui.h"
-#include "keyboard_handler.h"
+#include "keyboard_events.h"
 #include "network_operations.h"
+#include "keyboard_bridge.h"
 #include "time_operations.h"
 #include "pwrotocol.h"
 
 M5Canvas canvas(&M5Cardputer.Display);
-USBHIDKeyboard Keyboard;
 USBCDC USBSerialDevice;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
@@ -114,10 +114,9 @@ void setup() {
   // start keyboard and serial port
   USB.begin();
   USBSerialDevice.begin(115200);
-  Keyboard.begin();
+  usb_keyboard_init(); // USB by default, ble attempts to connect only when B is pressed
 
   delay(1000);
-  USBSerialDevice.println("Serial works");
 
   // try getting time
   setenv("TZ", "UTCO", 1);

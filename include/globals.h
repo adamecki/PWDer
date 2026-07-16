@@ -6,7 +6,6 @@
 #include <SD.h>
 #include <SPI.h>
 #include <USB.h>
-#include <USBHIDKeyboard.h>
 #include <WiFi.h>
 
 // Software libraries

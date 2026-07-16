@@ -8,6 +8,7 @@ extern const uint8_t frame3[];
 
 extern const uint8_t loudspeaker_unmuted[];
 extern const uint8_t loudspeaker[];
+extern const uint8_t bluetooth[];
 extern const uint8_t battery[];
 extern const uint8_t options[];
 extern const uint8_t padlock[];

@@ -4,9 +4,11 @@
 #include "gui.h"
 #include "icons.h"
 #include "network_operations.h"
+#include "keyboard_bridge.h"
 #include "time_operations.h"
 
-extern USBHIDKeyboard Keyboard;
+#include <NimBLEDevice.h>
+
 extern M5Canvas canvas;
 extern NTPClient timeClient;
 extern Unit_RTC RTC;
@@ -49,6 +51,22 @@ extern int mode7_index;
 extern int mode7_matches;
 extern int mode7_matchindex[100];
 
+void press_with_preferred_keyboard(special_key k) {
+  if(ble_keyboard_ready()) {
+    ble_send_key(k);
+  } else {
+    usb_send_key(k);
+  }
+}
+
+void press_with_preferred_keyboard(char c) {
+  if(ble_keyboard_ready()) {
+    ble_send_key(c);
+  } else {
+    usb_send_key(c);
+  }
+}
+
 void check_keyboard_events() {
   if (M5Cardputer.Keyboard.isChange()) {
     if (mode0_preview && (device_mode == 0 || device_mode == 7)) {
@@ -85,6 +103,8 @@ void check_keyboard_events() {
         } else if (M5Cardputer.Keyboard.isKeyPressed('c')) { // credits
           device_mode = 5;
           draw_ui();
+        } else if(M5Cardputer.Keyboard.isKeyPressed('b')) { // enable bluetooth keyboard
+          ble_keyboard_init();
         // } else if (M5Cardputer.Keyboard.isKeyPressed('s')) { // synchronize (deprecated)
         //   device_mode = 4;
         //   draw_ui();
@@ -100,90 +120,55 @@ void check_keyboard_events() {
         } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
           if (configuration.input_mode == 0 || configuration.input_mode == 2) {
             for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode0_selection].username)[i]);
             }
           }
 
           if (configuration.input_mode == 2) {
-            Keyboard.press(KEY_TAB);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(special_key::TAB);
           }
 
           if (configuration.input_mode == 1 || configuration.input_mode == 2) {
             for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode0_selection].password)[i]);
             }
           }
 
           if (configuration.input_mode == 2) {
-            Keyboard.press(KEY_RETURN);
-            delay(25);
-            Keyboard.releaseAll();
+            press_with_preferred_keyboard(special_key::RETURN);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('1')) { // enter username
           for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
-            Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(String(entries.credentials[mode0_selection].username)[i]);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('2')) { // enter password
           for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
-            Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(String(entries.credentials[mode0_selection].password)[i]);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('3')) { // enter all
           for (int i = 0; i < String(entries.credentials[mode0_selection].username).length(); i++) {
-            Keyboard.press(String(entries.credentials[mode0_selection].username)[i]);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(String(entries.credentials[mode0_selection].username)[i]);
           }
 
-          Keyboard.press(KEY_TAB);
-          delay(25);
-          Keyboard.releaseAll();
-          delay(25);
+          press_with_preferred_keyboard(special_key::TAB);
 
           for (int i = 0; i < String(entries.credentials[mode0_selection].password).length(); i++) {
-            Keyboard.press(String(entries.credentials[mode0_selection].password)[i]);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(String(entries.credentials[mode0_selection].password)[i]);
           }
 
-          Keyboard.press(KEY_RETURN);
-          delay(25);
-          Keyboard.releaseAll();
+          press_with_preferred_keyboard(special_key::RETURN);
         } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
           if ((network_available || rtc_available) && totp_available) {
             generate_totp(String(entries.credentials[mode0_selection].totp_secret));
             for (int i = 0; i < 6; i++) {
-              Keyboard.press(totp_buffer[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(totp_buffer[i]);
             }
             totp_buffer[6] = '\0';
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
-          Keyboard.press(KEY_TAB);
-          delay(25);
-          Keyboard.releaseAll();
+          press_with_preferred_keyboard(special_key::TAB);
         } else if (M5Cardputer.Keyboard.isKeyPressed('r')) { // press RETURN on a computer
-          Keyboard.press(KEY_RETURN);
-          delay(25);
-          Keyboard.releaseAll();
+          press_with_preferred_keyboard(special_key::RETURN);
         } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode0_selection < entries.credential_count) { // next password
           mode0_selection++;
           if (String(entries.credentials[mode0_selection].totp_secret) != "") {
@@ -475,10 +460,7 @@ void check_keyboard_events() {
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
           for (int i = 0; i < mode5_interactive_hyperlinks[mode5_page].length(); i++) {
-            Keyboard.press(mode5_interactive_hyperlinks[mode5_page][i]);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(mode5_interactive_hyperlinks[mode5_page][i]);
           }
         } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode5_page < 1) { // next page
           mode5_page++;
@@ -547,92 +529,57 @@ void check_keyboard_events() {
             pvault::update_config(VAULT_PATH, configuration);
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
-            Keyboard.press(KEY_TAB);
-            delay(25);
-            Keyboard.releaseAll();
+            press_with_preferred_keyboard(special_key::TAB);
           } else if (M5Cardputer.Keyboard.isKeyPressed('r')) { // press RETURN on a computer
-            Keyboard.press(KEY_RETURN);
-            delay(25);
-            Keyboard.releaseAll();
+            press_with_preferred_keyboard(special_key::RETURN);
           } else if (M5Cardputer.Keyboard.isKeyPressed('v')) {
             draw_ui();
             mode0_preview = true;
           } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { // enter data using default mode
             if (configuration.input_mode == 0 || configuration.input_mode == 2) {
               for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
-                Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
-                delay(25);
-                Keyboard.releaseAll();
-                delay(25);
+                press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
               }
             }
 
             if (configuration.input_mode == 2) {
-              Keyboard.press(KEY_TAB);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(special_key::TAB);
             }
 
             if (configuration.input_mode == 1 || configuration.input_mode == 2) {
               for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
-                Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
-                delay(25);
-                Keyboard.releaseAll();
-                delay(25);
+                press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
               }
             }
 
             if (configuration.input_mode == 2) {
-              Keyboard.press(KEY_RETURN);
-              delay(25);
-              Keyboard.releaseAll();
+              press_with_preferred_keyboard(special_key::RETURN);
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('1')) { // enter username
             for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('2')) { // enter password
             for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
             }
           } else if (M5Cardputer.Keyboard.isKeyPressed('3')) { // enter all
             for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].username).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].username)[i]);
             }
 
-            Keyboard.press(KEY_TAB);
-            delay(25);
-            Keyboard.releaseAll();
-            delay(25);
+            press_with_preferred_keyboard(special_key::TAB);
 
             for (int i = 0; i < String(entries.credentials[mode7_matchindex[mode7_index]].password).length(); i++) {
-              Keyboard.press(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
-              delay(25);
-              Keyboard.releaseAll();
-              delay(25);
+              press_with_preferred_keyboard(String(entries.credentials[mode7_matchindex[mode7_index]].password)[i]);
             }
 
-            Keyboard.press(KEY_RETURN);
-            delay(25);
-            Keyboard.releaseAll();
+            press_with_preferred_keyboard(special_key::RETURN);
           } else if (M5Cardputer.Keyboard.isKeyPressed('4')) { // Enter TOTP if available
             if ((network_available || rtc_available) && totp_available) {
               generate_totp(String(entries.credentials[mode7_matchindex[mode7_index]].totp_secret));
               for (int i = 0; i < 6; i++) {
-                Keyboard.press(totp_buffer[i]);
-                delay(25);
-                Keyboard.releaseAll();
-                delay(25);
+                press_with_preferred_keyboard(totp_buffer[i]);
               }
               totp_buffer[6] = '\0';
             }

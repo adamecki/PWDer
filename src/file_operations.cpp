@@ -36,8 +36,6 @@ void init_new_vault() {
 }
 
 void file_password_import() {
-  USBSerialDevice.println("OK");
-
   uint8_t salt[pvault::salt_size];
   if(!pvault::get_salt(VAULT_PATH, salt)) {
     return;

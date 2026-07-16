@@ -11,4 +11,6 @@
 #define PWROTOCOL_FILE_IMPORT           0x04
 #define PWROTOCOL_REQUEST_CONF          0x05
 
+#define PWROTOCOL_CHUNK_SIZE            4096 // bytes
+
 void pwrotocol_listen_and_respond();

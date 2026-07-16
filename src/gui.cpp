@@ -2,6 +2,7 @@
 
 #include "icons.h"
 #include "time_operations.h"
+#include "keyboard_bridge.h"
 
 extern M5Canvas canvas;
 extern Unit_RTC RTC;
@@ -498,14 +499,41 @@ void draw_ui() {
 
   canvas.setTextColor(WHITE);
   canvas.setTextDatum(middle_right);
-  if (network_available && rtc_available) {
-    push_icon(clockicon, M5Cardputer.Display.width() - 72, 4);
-    push_icon(network, M5Cardputer.Display.width() - 36, 4);
-  } else if (network_available) {
-    push_icon(network, M5Cardputer.Display.width() - 36, 4);
-  } else if (rtc_available) {
-    push_icon(clockicon, M5Cardputer.Display.width() - 36, 4);
+
+  // icon placement
+  int iconx[3] = { 204, 168, 132 };
+  bool iconx_used[3] = { false, false, false };
+
+  if(ble_keyboard_ready()) {
+    for(int i = 0; i < 3; i++) {
+      if(!iconx_used[i]) {
+        iconx_used[i] = true;
+        push_icon(bluetooth, iconx[i], 4);
+        break;
+      }
+    }
   }
+
+  if(network_available) {
+    for(int i = 0; i < 3; i++) {
+      if(!iconx_used[i]) {
+        iconx_used[i] = true;
+        push_icon(network, iconx[i], 4);
+        break;
+      }
+    }
+  }
+
+  if(rtc_available) {
+    for(int i = 0; i < 3; i++) {
+      if(!iconx_used[i]) {
+        iconx_used[i] = true;
+        push_icon(clockicon, iconx[i], 4);
+        break;
+      }
+    }
+  }
+
   if (device_mode != 1) {
     push_icon(help, M5Cardputer.Display.width() - 108, M5Cardputer.Display.height() - 36);
     if (!(device_mode == 7 && mode7_show_results == false)) {

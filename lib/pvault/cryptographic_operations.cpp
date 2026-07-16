@@ -108,6 +108,58 @@ namespace pvault_cryptography {
         return true;
     }
 
+    bool encrypt_chunked(
+        const uint8_t* key,
+        const uint8_t* nonce,
+        const uint8_t* plaintext,
+        uint32_t plaintext_length,
+        File& file
+    ) {
+        // argument validation
+        if(!key || !nonce || !plaintext || !file) { return false; }
+
+        // buffers
+        uint8_t tag[pvault::tag_size];
+        uint8_t chunk_bytes[CHUNK_SIZE];
+
+        // GCM init
+        mbedtls_gcm_context gcm;
+        mbedtls_gcm_init(&gcm);
+        
+        int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
+        if(ret != 0) {
+            mbedtls_gcm_free(&gcm);
+            return false;
+        }
+
+        // encryption
+        mbedtls_gcm_starts(&gcm, MBEDTLS_GCM_ENCRYPT, nonce, pvault::nonce_size, NULL, 0);
+
+        uint32_t remaining = plaintext_length;
+        uint32_t read_offset = 0;
+
+        while(remaining > 0) {
+            uint32_t n;
+
+            if(remaining > CHUNK_SIZE) {
+                n = CHUNK_SIZE;
+            } else {
+                n = remaining;
+            }
+
+            mbedtls_gcm_update(&gcm, n, plaintext + read_offset, chunk_bytes);
+            file.write(chunk_bytes, n);
+
+            read_offset += n;
+            remaining -= n;
+        }
+
+        mbedtls_gcm_finish(&gcm, tag, pvault::tag_size);
+        mbedtls_gcm_free(&gcm);
+        file.write(tag, pvault::tag_size);
+        return true;
+    }
+
     bool decrypt_gcm(
         const uint8_t* key,
         const uint8_t* nonce,
@@ -152,6 +204,122 @@ namespace pvault_cryptography {
 
         return true;
     }
+    
+    bool decrypt_verify(
+        const uint8_t* key,
+        const uint8_t* nonce,
+        File& file,
+        uint32_t ciphertext_length
+    ) {
+        // argument validation
+        if(!key || !nonce || !file) { return false; }
+
+        // GCM init
+        mbedtls_gcm_context gcm;
+        mbedtls_gcm_init(&gcm);
+
+        int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
+        if(ret != 0) {
+            mbedtls_gcm_free(&gcm);
+            return false;
+        }
+
+        // read tag
+        uint8_t tag[pvault::tag_size];
+        uint32_t file_size = file.size();
+        file.seek(file_size - pvault::tag_size);
+        file.read(tag, pvault::tag_size);
+
+        // seek back to ciphertext start
+        file.seek(sizeof(pvault::header));
+
+        // buffers
+        uint8_t chunk_bytes[CHUNK_SIZE];
+        uint32_t bytes_remaining = ciphertext_length;
+
+        mbedtls_gcm_starts(&gcm, MBEDTLS_GCM_DECRYPT, nonce, pvault::nonce_size, NULL, 0);
+
+        uint32_t read_size;
+
+        while(bytes_remaining > 0) {
+            if(bytes_remaining > CHUNK_SIZE) {
+                read_size = CHUNK_SIZE;
+            } else {
+                read_size = bytes_remaining;
+            }
+
+            file.read(chunk_bytes, read_size);
+
+            mbedtls_gcm_update(&gcm, read_size, chunk_bytes, chunk_bytes);
+
+            bytes_remaining -= read_size;
+        }
+
+        uint8_t computed_tag[pvault::tag_size];
+        mbedtls_gcm_finish(&gcm, computed_tag, pvault::tag_size);
+        mbedtls_gcm_free(&gcm);
+
+        return memcmp(tag, computed_tag, pvault::tag_size) == 0;
+    }
+
+    bool decrypt_chunked( // will return junk if get_key earlier returned false but program still decided to decrypt
+        const uint8_t* key,
+        const uint8_t* nonce,
+        File& file,
+        uint32_t ciphertext_length,
+        uint8_t* plaintext
+    ) {
+        // argument validation
+        if(!key || !nonce || !file || !plaintext) { return false; }
+
+        // buffers
+        uint32_t file_size = file.size();
+        uint8_t tag[pvault::tag_size];
+        uint8_t chunk_bytes[CHUNK_SIZE];
+
+        // read tag
+        file.seek(file_size - pvault::tag_size);
+        file.read(tag, pvault::tag_size);
+
+        // GCM init
+        mbedtls_gcm_context gcm;
+        mbedtls_gcm_init(&gcm);
+
+        int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
+        if(ret != 0) {
+            mbedtls_gcm_free(&gcm);
+            return false;
+        }
+
+        // decryption
+        mbedtls_gcm_starts(&gcm, MBEDTLS_GCM_DECRYPT, nonce, pvault::nonce_size, NULL, 0);
+
+        // seek back to ciphertext start
+        file.seek(sizeof(pvault::header));
+
+        uint32_t bytes_remaining = ciphertext_length;
+        uint32_t write_offset = 0;
+        uint32_t read_size;
+        
+        while(bytes_remaining > 0) {
+            if(bytes_remaining > CHUNK_SIZE) {
+                read_size = CHUNK_SIZE;
+            } else {
+                read_size = bytes_remaining;
+            }
+
+            file.read(chunk_bytes, read_size);
+
+            mbedtls_gcm_update(&gcm, read_size, chunk_bytes, plaintext + write_offset);
+
+            write_offset += read_size;
+            bytes_remaining -= read_size;
+        }
+
+        mbedtls_gcm_finish(&gcm, tag, pvault::tag_size);
+        mbedtls_gcm_free(&gcm);
+        return true;
+    }
 
     bool write_header(File& file, const pvault::header& hdr) {
         // file validation
@@ -179,6 +347,7 @@ namespace pvault_cryptography {
         return true;
     }
 
+    // this is going to be deprecated
     bool write_tag(File& file, const uint8_t* tag) {
         // file and tag validation
         if(!file || !tag) { return false; }
@@ -204,6 +373,7 @@ namespace pvault_cryptography {
 
         return true;
     }
+    // end of deprecation
 
     void secure_zero(void* ptr, uint32_t size) {
         volatile uint8_t* p = reinterpret_cast<volatile uint8_t*>(ptr);

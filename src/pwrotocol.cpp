@@ -101,7 +101,6 @@ void pwrotocol_listen_and_respond() {
                 delay(1);
                 if(millis() - wait > PWROTOCOL_TIMEOUT_MS) {
                     // too long
-                    delete[] ciphertext;
                     return;
                 }
             }
@@ -109,7 +108,6 @@ void pwrotocol_listen_and_respond() {
             // receive tag
             uint8_t tag[pvault::tag_size];
             if(USBSerialDevice.readBytes((char*)tag, pvault::tag_size) != pvault::tag_size) {
-                delete[] ciphertext;
                 return;
             }
 
@@ -118,7 +116,6 @@ void pwrotocol_listen_and_respond() {
 
             File file = SD.open(IMPORT_FILE_PATH, FILE_WRITE);
             if(!file) {
-                delete[] ciphertext;
                 return;
             }
 
@@ -127,9 +124,7 @@ void pwrotocol_listen_and_respond() {
             file.write(reinterpret_cast<const uint8_t*>(&len), sizeof(len));
             file.write(ciphertext, len);
             file.write(tag, pvault::tag_size);
-
             file.close();
-            delete[] ciphertext;
 
             device_mode = 6;
             draw_ui();
