@@ -13,7 +13,7 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Storing up to 100 passwords using AES128 encryption
 - Protection with master password (PBKDF2 key derivation)
 - Searching for passwords by entry name
-- Automatic password input to your computer using USB cable
+- Automatic password input to your computer using USB cable or Bluetooth
 - Synchronizing with .kdbx (KeePass) files over USB cable
 - Support for TOTP two-factor authentication
 - Fun, simple design
