@@ -103,6 +103,7 @@ Press the arrow keys to navigate, and hold down V to preview the username and pa
 - `V` - hold to preview username, password and TOTP
 - `T` - simulate pressing TAB on the computer.
 - `R` - simulate pressing Enter on the computer.
+- `B` - enable Bluetooth
 - `M` - mute or unmute the speaker. The default state for the speaker is muted.
 - `L` - lock the device. Alternatively, you can just reset the device.
 - `N` - connect (or reconnect) Wi-Fi, usually after changing Wi-Fi settings in Options.
