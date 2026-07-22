@@ -19,7 +19,13 @@ namespace pvault {
 
         uint32_t len = hdr.ciphertext_length;
 
-        bool decryption = pvault_cryptography::decrypt_verify(key, hdr.nonce, file, len);
+        // get tag
+        uint8_t tag[pvault::tag_size];
+        uint32_t file_size = file.size();
+        file.seek(file_size - pvault::tag_size);
+        file.read(tag, pvault::tag_size);
+
+        bool decryption = pvault_cryptography::decrypt_verify(key, hdr.nonce, file, len, tag, sizeof(pvault::header));
         
         file.close();
 
@@ -204,32 +210,68 @@ namespace pvault {
         const char* path,
         const device_settings& settings
     ) {
-        File read = SD.open(path, FILE_READ);
-        if(!read) { return false; }
-        
-        header hdr{};
-        pvault_cryptography::read_header(read, hdr);
+        // open the old file
+        File old_file = SD.open(path, FILE_READ);
+        if(!old_file) { return false; }
 
+        // read its header
+        header hdr{};
+        if(!pvault_cryptography::read_header(old_file, hdr)) {
+            old_file.close();
+            return false;
+        }
+
+        // update settings in header
         hdr.settings = settings;
 
+        // obtain length and add tag size to it
         uint32_t len = hdr.ciphertext_length;
-        uint8_t* ciphertext = new uint8_t[len];
-        uint8_t tag[tag_size];
+        len += pvault::tag_size;
 
-        read.read(ciphertext, len);
-        read.read(tag, tag_size);
+        // open temp file
+        String temp_path = String(path);
+        temp_path += ".temp";
 
-        read.close();
+        if(SD.exists(temp_path)) { SD.remove(temp_path); }
+        File new_file = SD.open(temp_path, FILE_WRITE);
+        if(!new_file) {
+            old_file.close();
+            return false;
+        }
 
+        // rewrite header and remaining bytes
+        if(!pvault_cryptography::write_header(new_file, hdr)) {
+            new_file.close();
+            old_file.close();
+            return false;
+        }
+
+        uint32_t to_write = len;
+        uint32_t write_size;
+        
+        uint8_t buffer[CHUNK_SIZE];
+
+        while(to_write > 0) {
+            if(to_write > CHUNK_SIZE) {
+                write_size = CHUNK_SIZE;
+            } else {
+                write_size = to_write;
+            }
+        
+            old_file.read(buffer, write_size);
+            new_file.write(buffer, write_size);
+
+            to_write -= write_size;
+        }
+
+        old_file.close();
+        new_file.close();
+
+        // delete old file and replace with new
         SD.remove(path);
-        File write = SD.open(path, FILE_WRITE);
-        pvault_cryptography::write_header(write, hdr);
-        write.write(ciphertext, len);
-        pvault_cryptography::write_tag(write, tag);
-        write.close();
+        if(SD.exists(temp_path)) { SD.rename(temp_path, path); }
 
-        delete[] ciphertext;
-
+        // exit
         return true;
     }
 
@@ -276,19 +318,37 @@ namespace pvault {
         
         const uint8_t* key,
         const uint8_t* salt,
-        const uint8_t* nonce,
-        const uint8_t* tag,
-        const uint32_t len,
-
-        const uint8_t* ciphertext
+        
+        const char* import_path
     ) {
-        // check if current key can decrypt provided ciphertext
-        // vault* dummy = new vault;
-        // bool decryption = pvault_cryptography::decrypt_gcm(key, nonce, ciphertext, len, reinterpret_cast<uint8_t*>(dummy), tag);
-        // delete dummy;
+        File import_file = SD.open(import_path, FILE_READ);
+        // read file header
+        // magic 8 bytes
+        uint8_t magic[8];
+        import_file.read(magic, 8);
+    
+        if(memcmp(magic, "PWIMPORT", 8) != 0) {
+            return false;
+        }
 
-        // if(!decryption) { return false; }
+        // nonce 12 bytes
+        uint8_t nonce[pvault::nonce_size];
+        import_file.read(nonce, pvault::nonce_size);
 
+        // length 4 bytes
+        uint32_t len;
+        import_file.read(reinterpret_cast<uint8_t*>(&len), sizeof(uint32_t));
+
+        // read tag
+        uint32_t file_size = import_file.size();
+        uint8_t tag[pvault::tag_size];
+        import_file.seek(file_size - pvault::tag_size);
+        import_file.read(tag, pvault::tag_size);
+
+        // check if key that we have can decrypt the imported vault. Otherwise there's no point doing it.
+        bool decryption = pvault_cryptography::decrypt_verify(key, nonce, import_file, len, tag, 24);
+        if(!decryption) { return false; }
+        
         // overwrite vault with provided settings 
         header hdr{};
 
@@ -306,13 +366,38 @@ namespace pvault {
         memcpy(hdr.nonce, nonce, pvault::nonce_size);
 
         if(SD.exists(path)) { SD.remove(path); }
-        File file = SD.open(path, FILE_WRITE);
+        File new_file = SD.open(path, FILE_WRITE);
         
-        pvault_cryptography::write_header(file, hdr);
-        file.write(ciphertext, len);
-        pvault_cryptography::write_tag(file, tag);
+        pvault_cryptography::write_header(new_file, hdr);
 
-        file.close();
+        // copy ciphertext from old file to new
+        uint32_t to_copy = len;    
+        uint32_t copy_size;
+        uint8_t copy_buffer[CHUNK_SIZE];
+
+        import_file.seek(24);
+
+        while(to_copy > 0) {
+            if(to_copy > CHUNK_SIZE) {
+                copy_size = CHUNK_SIZE;
+            } else {
+                copy_size = to_copy;
+            }
+        
+            import_file.read(copy_buffer, copy_size);
+            new_file.write(copy_buffer, copy_size);
+
+            to_copy -= copy_size;
+        }
+
+        pvault_cryptography::write_tag(new_file, tag);
+
+        import_file.close();
+        new_file.close();
+
+        // remove import file
+        SD.remove(import_path);
+
         return true;
     }
 }

@@ -46,6 +46,7 @@ PWROTOCOL_REQUEST_CONF      = b'\x05'
 
 PWROTOCOL_TIMEOUT_S         = 10
 PWROTOCOL_BAUDRATE          = 115200
+PWROTOCOL_CHUNK_SIZE        = 64
 
 class bcolors:
     HEADER = '\033[95m'
@@ -125,6 +126,25 @@ def find_pwder():
             pass
 
     return None
+
+def send_chunked(ser: serial.Serial, data: bytes):
+    to_send = len(data)
+    sent = 0
+
+    while sent < to_send:
+        chunk = data[sent:sent + PWROTOCOL_CHUNK_SIZE]
+        ser.write(chunk)
+        ser.flush()
+
+        response = ser.read(len(PWROTOCOL_HANDSHAKE_SUCCESS))
+
+        if len(response) != len(PWROTOCOL_HANDSHAKE_SUCCESS):
+            exit(1)
+
+        if response != PWROTOCOL_HANDSHAKE_SUCCESS:
+            exit(1)
+
+        sent += PWROTOCOL_CHUNK_SIZE
 
 ###
 ### Title screen
@@ -272,11 +292,21 @@ print()
 print(bcolors.HEADER + "Sending data to PWDer... " + bcolors.ENDC, end='')
 
 pwder.write(PWROTOCOL_FILE_IMPORT)
+pwder.read(2)
+
 pwder.write(b"PWIMPORT")
+pwder.read(2)
+
 pwder.write(nonce)
+pwder.read(2)
+
 pwder.write(struct.pack("<I", len(ciphertext)))
-pwder.write(ciphertext)
+pwder.read(2)
+
+send_chunked(pwder, ciphertext)
+
 pwder.write(tag)
+pwder.read(2)
 
 print(bcolors.OKGREEN + "OK" + bcolors.ENDC)
 print()

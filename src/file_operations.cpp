@@ -35,54 +35,6 @@ void init_new_vault() {
   pvault::init_vault(VAULT_PATH, DEFAULT_PASSWORD, configuration, entries);
 }
 
-void file_password_import() {
-  uint8_t salt[pvault::salt_size];
-  if(!pvault::get_salt(VAULT_PATH, salt)) {
-    return;
-  }
-  
-  File import_file = SD.open(IMPORT_FILE_PATH, FILE_READ);
-  char magic[8];
-  import_file.read(reinterpret_cast<uint8_t*>(&magic), 8);
-  if(memcmp(magic, "PWIMPORT", 8) != 0) {
-    import_file.close();
-    return;
-  }
-
-  uint8_t nonce[pvault::nonce_size];
-  import_file.read(nonce, pvault::nonce_size);
-
-  uint32_t len;
-  import_file.read(reinterpret_cast<uint8_t*>(&len), sizeof(uint32_t));
-
-  uint8_t* ciphertext = new uint8_t[len];
-  import_file.read(ciphertext, len);
-
-  uint8_t tag[pvault::tag_size];
-  import_file.read(tag, pvault::tag_size);
-  import_file.close();
-
-  if(!pvault::replace_vault(
-    VAULT_PATH,
-    configuration,
-    aes_key,
-    salt,
-    nonce,
-    tag,
-    len,
-    ciphertext
-  )) {
-    delete[] ciphertext;
-    return;
-  }
-
-  delete[] ciphertext;
-  SD.remove(IMPORT_FILE_PATH);
-
-  pvault::load_vault(VAULT_PATH, aes_key, configuration, entries);
-  return;
-}
-
 void export_vault() {
   String export_save_string = "";
   for(int i = 1; i <= entries.credential_count; i++) {

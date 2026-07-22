@@ -7,8 +7,6 @@
 #include "keyboard_bridge.h"
 #include "time_operations.h"
 
-#include <NimBLEDevice.h>
-
 extern M5Canvas canvas;
 extern NTPClient timeClient;
 extern Unit_RTC RTC;
@@ -198,7 +196,7 @@ void check_keyboard_events() {
           mode1_ispasswordbeingchanged = false;
           mode1_passwordinput = "";
           draw_ui();
-          push_icon(error, 4, 4);
+          push_icon(error, 4, 4, 1);
           canvas.pushSprite(0, 0);
         } else {
           for (auto i : status.word) {
@@ -224,7 +222,7 @@ void check_keyboard_events() {
 
                 device_mode = 0;
                 draw_ui();
-                push_icon(ok, 4, 4);
+                push_icon(ok, 4, 4, 1);
                 canvas.pushSprite(0, 0);
               } else {
                 // unlock device
@@ -236,12 +234,12 @@ void check_keyboard_events() {
                 mode3_tempaddr = String(entries.credentials[0].password);
                 mode3_tempport = String(entries.credentials[0].totp_secret);
 
-                if(SD.exists(IMPORT_FILE_PATH)) {
-                  device_mode = 6;
-                } else {
+                // if(SD.exists(IMPORT_FILE_PATH)) {
+                //   device_mode = 6;
+                // } else {
                   device_mode = 0;
                   if(String(entries.credentials[mode0_selection].totp_secret) != "") { totp_available = true; }
-                }
+                // }
 
                 draw_ui();
               }
@@ -254,7 +252,7 @@ void check_keyboard_events() {
                 mode1_passwordinput = "";
                 draw_ui();
               }
-              push_icon(error, 4, 4);
+              push_icon(error, 4, 4, 1);
               canvas.pushSprite(0, 0);
             }
 
@@ -415,7 +413,7 @@ void check_keyboard_events() {
               break;
             case 8:
               export_vault();
-              push_icon(ok, 4, 4);
+              push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
               break;
             default:
@@ -426,19 +424,19 @@ void check_keyboard_events() {
               entries.credentials[0] = init_cred;
               pvault::update_vault(VAULT_PATH, aes_key, configuration, entries);
               draw_ui();
-              push_icon(ok, 4, 4);
+              push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
             }
             // things that need rewriting header only
             if(mode3_page == 0 || mode3_page == 6) {
               pvault::update_config(VAULT_PATH, configuration);
               draw_ui();
-              push_icon(ok, 4, 4);
+              push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
             }
             if(mode3_page == 7) {
               draw_ui();
-              push_icon(ok, 4, 4);
+              push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
             }
           }
@@ -467,28 +465,6 @@ void check_keyboard_events() {
           draw_ui();
         } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode5_page > 0) { // previous page
           mode5_page--;
-          draw_ui();
-        }
-        break;
-
-      case 6:
-        if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          if(configuration.speaker_on == 1) {
-            configuration.speaker_on = 0;
-          } else {
-            configuration.speaker_on = 1;
-          }
-
-          pvault::update_config(VAULT_PATH, configuration);
-          draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('y')) {
-          file_password_import();
-          SD.remove(IMPORT_FILE_PATH);
-          device_mode = 0;
-          draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('n')) {
-          SD.remove(IMPORT_FILE_PATH);
-          device_mode = 0;
           draw_ui();
         }
         break;

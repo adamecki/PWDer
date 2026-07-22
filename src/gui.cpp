@@ -1,5 +1,6 @@
 #include "globals.h"
 
+#include "gui.h"
 #include "icons.h"
 #include "time_operations.h"
 #include "keyboard_bridge.h"
@@ -39,19 +40,26 @@ extern int mode7_index;
 extern pvault::vault entries;
 extern pvault::device_settings configuration;
 
-void push_icon(const uint8_t bitmap[], int xoffset = 0, int yoffset = 0, int scale = 1) {
+extern const pwder_style::color_scheme pwcolors[1];
+const int current_scheme = 0; // make it changeable later
+
+void push_icon(const pwder_style::icon32 &icon, int xoffset, int yoffset, int scale) {
+  canvas.fillRect(xoffset, yoffset, 32 * scale, 32 * scale, pwcolors[current_scheme].background_color);
+
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 32; x++) {
       int index = ((y * 32) + x) * 3;
 
-      uint8_t r = bitmap[index];
-      uint8_t g = bitmap[index + 1];
-      uint8_t b = bitmap[index + 2];
+      uint8_t r = icon.bitmap[index];
+      uint8_t g = icon.bitmap[index + 1];
+      uint8_t b = icon.bitmap[index + 2];
 
       // xs - X scaled, ys - Y scaled
       for (int xs = 1; xs <= scale; xs++) {
         for (int ys = 1; ys <= scale; ys++) {
-          canvas.drawPixel((x * scale) + xoffset + xs, (y * scale) + yoffset + ys, lgfx::v1::color565(r, g, b));
+          if(!icon.mask[index / 3]) {
+            canvas.drawPixel((x * scale) + xoffset + xs, (y * scale) + yoffset + ys, lgfx::v1::color565(r, g, b));
+          }
         }
       }
     }
@@ -59,18 +67,44 @@ void push_icon(const uint8_t bitmap[], int xoffset = 0, int yoffset = 0, int sca
 }
 
 void no_sdcard_crash_screen() {
-  canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), NAVY);
-  canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, DARKGREY);
-  canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, LIGHTGREY);
+  canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), pwcolors[current_scheme].background_color);
+  canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, pwcolors[current_scheme].border_color);
+  canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, pwcolors[current_scheme].foreground_color);
 
-  push_icon(error, 4, 4);
+  // icon
+  push_icon(error, 4, 4, 1);
 
+  // caption
   canvas.setTextDatum(middle_left);
   canvas.drawString(SDCARD_NOT_FOUND_TITLE, 40, 20);
 
-  canvas.setTextColor(BLACK);
+  // content
+  canvas.setTextColor(pwcolors[current_scheme].background_text_color);
   canvas.setTextDatum(top_center);
   canvas.drawString(SDCARD_NOT_FOUND_DESCRIPTION, M5Cardputer.Display.width() / 2, 50);
+
+  canvas.pushSprite(0, 0);
+}
+
+void password_import_screen() {
+  canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), pwcolors[current_scheme].background_color);
+  canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, pwcolors[current_scheme].border_color);
+  canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, pwcolors[current_scheme].foreground_color);
+
+  // icon
+  push_icon(options, 4, 4, 1);
+
+  // caption
+  canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
+  canvas.setTextDatum(middle_left);
+  canvas.drawString(PWIMPORT_TITLEBAR, 40, 20);
+
+  // content
+  canvas.setTextColor(pwcolors[current_scheme].background_text_color);
+  canvas.setTextDatum(top_center);
+  canvas.drawString(PWIMPORT_REPLACE_PASSWORDS, M5Cardputer.Display.width() / 2, 50);
+  canvas.setTextDatum(bottom_center);
+  canvas.drawString("[ Y / N ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
 
   canvas.pushSprite(0, 0);
 }
@@ -80,29 +114,29 @@ void draw_ui() {
   String enumerator = "";
 
   // background
-  canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), NAVY);
-  canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, DARKGREY);
-  canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, LIGHTGREY);
+  canvas.fillRect(0, 0, M5Cardputer.Display.width(), M5Cardputer.Display.height(), pwcolors[current_scheme].background_color);
+  canvas.fillRect(0, 40, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 80, pwcolors[current_scheme].border_color);
+  canvas.fillRect(0, 44, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 88, pwcolors[current_scheme].foreground_color);
 
   switch (device_mode) {
   case 0:
     // icon
-    push_icon(key, 4, 4);
+    push_icon(key, 4, 4, 1);
 
     // caption
     canvas.setTextDatum(middle_left);
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.drawString(PASSWORD_MANAGER_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     if (M5Cardputer.Keyboard.isKeyPressed('v')) {
       canvas.setTextDatum(top_center);
       if ((network_available || rtc_available) && totp_available) {
         generate_totp(String(entries.credentials[mode0_selection].totp_secret));
         canvas.setTextColor(BLUE);
         canvas.drawString(String(entries.credentials[mode0_selection].username) + " | " + String(totp_buffer), M5Cardputer.Display.width() / 2, 50);
-        canvas.setTextColor(BLACK);
+        canvas.setTextColor(pwcolors[current_scheme].background_text_color);
         totp_buffer[6] = '\0';
       } else {
         canvas.drawString(String(entries.credentials[mode0_selection].username), M5Cardputer.Display.width() / 2, 50);
@@ -115,7 +149,7 @@ void draw_ui() {
         canvas.setTextColor(BLUE);
       }
       canvas.drawString(String(entries.credentials[mode0_selection].title), M5Cardputer.Display.width() / 2, 50);
-      canvas.setTextColor(BLACK);
+      canvas.setTextColor(pwcolors[current_scheme].background_text_color);
       canvas.setTextDatum(bottom_center);
       if (entries.credential_count == 1) {
         canvas.drawString("[ 1 / 1 ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
@@ -135,15 +169,15 @@ void draw_ui() {
 
   case 1:
     // icon
-    push_icon(padlock, 4, 4);
+    push_icon(padlock, 4, 4, 1);
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     canvas.drawString(LOGIN_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     canvas.setTextDatum(middle_center);
     mode1_asterisks = "";
     for (int i = 0; i < mode1_passwordinput.length(); i++) {
@@ -154,15 +188,15 @@ void draw_ui() {
 
   case 2:
     // icon
-    push_icon(help, 4, 4);
+    push_icon(help, 4, 4, 1);
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     canvas.drawString(HANDBOOK_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     switch (mode2_page) {
     case 0:
       canvas.setTextDatum(top_left);
@@ -207,15 +241,15 @@ void draw_ui() {
 
   case 3:
     // icon
-    push_icon(options, 4, 4);
+    push_icon(options, 4, 4, 1);
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     canvas.drawString(OPTIONS_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     canvas.setTextDatum(top_center);
     switch (mode3_page) {
     case 0:
@@ -309,25 +343,25 @@ void draw_ui() {
     case 0:
     case 1:
     case 2:
-      push_icon(frame0, 4, 4);
+      push_icon(drum, 4, 4, 1);
       break;
     case 3:
-      push_icon(ok, 4, 4);
+      push_icon(ok, 4, 4, 1);
       break;
     case 4:
     case 5:
     case 6:
-      push_icon(error, 4, 4);
+      push_icon(error, 4, 4, 1);
       break;
     }
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     canvas.drawString(SYNC_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     canvas.setTextDatum(top_center);
     switch (mode4_page) {
     case 0:
@@ -371,15 +405,15 @@ void draw_ui() {
 
   case 5:
     // icon
-    push_icon(me, 4, 4);
+    push_icon(me, 4, 4, 1);
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     canvas.drawString(CREDITS_TITLEBAR, 40, 20);
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     canvas.setTextDatum(top_center);
     switch (mode5_page) {
       case 0:
@@ -405,29 +439,12 @@ void draw_ui() {
     }
     break;
 
-  case 6:
-    // icon
-    push_icon(options, 4, 4);
-
-    // caption
-    canvas.setTextColor(WHITE);
-    canvas.setTextDatum(middle_left);
-    canvas.drawString(PWIMPORT_TITLEBAR, 40, 20);
-
-    // content
-    canvas.setTextColor(BLACK);
-    canvas.setTextDatum(top_center);
-    canvas.drawString(PWIMPORT_REPLACE_PASSWORDS, M5Cardputer.Display.width() / 2, 50);
-    canvas.setTextDatum(bottom_center);
-    canvas.drawString("[ Y / N ]", M5Cardputer.Display.width() / 2, M5Cardputer.Display.height() - 50);
-    break;
-
   case 7:
     // icon
-    push_icon(search, 4, 4);
+    push_icon(search, 4, 4, 1);
 
     // caption
-    canvas.setTextColor(WHITE);
+    canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
     canvas.setTextDatum(middle_left);
     if (mode7_show_results) {
       canvas.drawString(mode7_query, 40, 20);
@@ -436,7 +453,7 @@ void draw_ui() {
     }
 
     // content
-    canvas.setTextColor(BLACK);
+    canvas.setTextColor(pwcolors[current_scheme].background_text_color);
     if (mode7_show_results) {
       if (M5Cardputer.Keyboard.isKeyPressed('v') && mode7_matches > 0) {
         canvas.setTextDatum(top_center);
@@ -445,7 +462,7 @@ void draw_ui() {
           canvas.setTextColor(BLUE);
           canvas.drawString(String(entries.credentials[mode7_matchindex[mode7_index]].username) + " | " + String(totp_buffer),
                             M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextColor(BLACK);
+          canvas.setTextColor(pwcolors[current_scheme].background_text_color);
           totp_buffer[6] = '\0';
         } else {
           canvas.drawString(String(entries.credentials[mode7_matchindex[mode7_index]].username), M5Cardputer.Display.width() / 2, 50);
@@ -460,7 +477,7 @@ void draw_ui() {
             canvas.setTextColor(BLUE);
           }
           canvas.drawString(String(entries.credentials[mode7_matchindex[mode7_index]].title), M5Cardputer.Display.width() / 2, 50);
-          canvas.setTextColor(BLACK);
+          canvas.setTextColor(pwcolors[current_scheme].background_text_color);
         }
         canvas.setTextDatum(bottom_center);
         if (mode7_matches == 0) {
@@ -492,12 +509,12 @@ void draw_ui() {
 
   // the mostly unchanging rest of the UI
   if (configuration.speaker_on == 0 && device_mode != 1) {
-    push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+    push_icon(loudspeaker, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36, 1);
   } else if (configuration.speaker_on == 1 && device_mode != 1) {
-    push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36);
+    push_icon(loudspeaker_unmuted, M5Cardputer.Display.width() - 36, M5Cardputer.Display.height() - 36, 1);
   }
 
-  canvas.setTextColor(WHITE);
+  canvas.setTextColor(pwcolors[current_scheme].foreground_text_color);
   canvas.setTextDatum(middle_right);
 
   // icon placement
@@ -508,7 +525,7 @@ void draw_ui() {
     for(int i = 0; i < 3; i++) {
       if(!iconx_used[i]) {
         iconx_used[i] = true;
-        push_icon(bluetooth, iconx[i], 4);
+        push_icon(bluetooth, iconx[i], 4, 1);
         break;
       }
     }
@@ -518,7 +535,7 @@ void draw_ui() {
     for(int i = 0; i < 3; i++) {
       if(!iconx_used[i]) {
         iconx_used[i] = true;
-        push_icon(network, iconx[i], 4);
+        push_icon(network, iconx[i], 4, 1);
         break;
       }
     }
@@ -528,14 +545,14 @@ void draw_ui() {
     for(int i = 0; i < 3; i++) {
       if(!iconx_used[i]) {
         iconx_used[i] = true;
-        push_icon(clockicon, iconx[i], 4);
+        push_icon(clockicon, iconx[i], 4, 1);
         break;
       }
     }
   }
 
   if (device_mode != 1) {
-    push_icon(help, M5Cardputer.Display.width() - 108, M5Cardputer.Display.height() - 36);
+    push_icon(help, M5Cardputer.Display.width() - 108, M5Cardputer.Display.height() - 36, 1);
     if (!(device_mode == 7 && mode7_show_results == false)) {
       canvas.drawString("M ", M5Cardputer.Display.width() - 40, M5Cardputer.Display.height() - 20);
       canvas.drawString("H ", M5Cardputer.Display.width() - 112, M5Cardputer.Display.height() - 20);
@@ -543,12 +560,50 @@ void draw_ui() {
   }
 
   canvas.setTextDatum(middle_left);
-  if (last_battery_percentage > -1) {
-    canvas.drawString(String(last_battery_percentage) + "%", 40, M5Cardputer.Display.height() - 20);
-    push_icon(battery, 4, M5Cardputer.Display.height() - 36);
-  } else {
-    push_icon(nobattery, 4, M5Cardputer.Display.height() - 36);
+  canvas.drawString(String(last_battery_percentage) + "%", 40, M5Cardputer.Display.height() - 20);
+  push_icon(battery, 4, M5Cardputer.Display.height() - 36, 1);
+
+  // vault usage
+  int vault_usage_statusbar_width = map(entries.credential_count, 0, pvault::max_entries - 1, 0, M5Cardputer.Display.width());
+  canvas.fillRect(0, 40, vault_usage_statusbar_width, 4, pwcolors[current_scheme].statusbar_color);
+
+  // current position or progress
+  int statusbar_left = 0;
+  int statusbar_width = 0;
+
+  switch(device_mode) {
+    case 0:
+      if(entries.credential_count != 0) {
+        statusbar_width = M5Cardputer.Display.width() / entries.credential_count;
+        statusbar_left = map(mode0_selection, 1, entries.credential_count, 0, M5Cardputer.Display.width() - statusbar_width);
+      }
+      break;
+    case 2:
+      statusbar_width = M5Cardputer.Display.width() / 4;
+      statusbar_left = map(mode2_page, 0, 3, 0, M5Cardputer.Display.width() - statusbar_width);
+      break;
+    case 3:
+      statusbar_width = M5Cardputer.Display.width() / MODE3_PAGES_NUMBER;
+      statusbar_left = map(mode3_page, 0, MODE3_PAGES_NUMBER - 1, 0, M5Cardputer.Display.width() - statusbar_width);
+      break;
+    // case 4:
+    //   break;
+    case 5:
+      statusbar_width = M5Cardputer.Display.width() / 2;
+      statusbar_left = map(mode5_page, 0, 1, 0, M5Cardputer.Display.width() - statusbar_width);
+      break;
+    case 7:
+      if(mode7_matches != 0) {
+        statusbar_width = M5Cardputer.Display.width() / mode7_matches;
+        statusbar_left = map(mode7_index, 0, mode7_matches - 1, 0, M5Cardputer.Display.width() - statusbar_width);
+      }
+      break;
+    default:
+      break;
   }
+
+  statusbar_width += 1; // bro
+  canvas.fillRect(statusbar_left, M5Cardputer.Display.height() - 44, statusbar_width, 4, pwcolors[current_scheme].statusbar_color);
 
   canvas.pushSprite(0, 0);
 }

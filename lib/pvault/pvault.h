@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <SD.h>
 
 // PWDer vault file format 1.0
 // and functions for its operation
@@ -96,14 +97,13 @@ namespace pvault {
         const char* path,
         uint8_t* salt
     );
-    bool replace_vault(
+    bool replace_vault( // with import file
         const char* path,
-        const device_settings& settings,  
+        const device_settings& settings,
+        
         const uint8_t* key,
         const uint8_t* salt,
-        const uint8_t* nonce,
-        const uint8_t* tag,
-        const uint32_t len,
-        const uint8_t* ciphertext
+        
+        const char* import_path
     );
 }

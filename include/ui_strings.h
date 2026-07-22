@@ -54,7 +54,7 @@
 #define SYNC_ERR_DESCRIPTION_SERVER "Server error"
 #define SYNC_ERR_DESCRIPTION_FILE "File error"
 
-#define CREDITS_PWDER "2026 PWDer by floriano (0.4) >"
+#define CREDITS_PWDER "PWDer 0.5 \"Untangled\" >"
 #define CREDITS_WEBSITE "< Visit my website!"
 #define CREDITS_PWDER_GITHUB "adamecki/PWDer on GitHub"
 #define CREDITS_WEBSITE_LINK "floriano.uk"
@@ -65,11 +65,6 @@
 
 #define SDCARD_NOT_FOUND_TITLE "Error"
 #define SDCARD_NOT_FOUND_DESCRIPTION "SD card not found!"
-
-#define INTEGRITY_CHECK_FAILED_LINE1 "Vault integrity check failed."
-#define INTEGRITY_CHECK_FAILED_LINE2 "Its files might have been altered."
-#define INTEGRITY_CHECK_FAILED_LINE3 "Please import passwords again"
-#define INTEGRITY_CHECK_FAILED_LINE4 "or back up your vault."
 
 #define SAMPLE_ENTRY "Sample Entry"
 #define SAMPLE_USERNAME "sample_user"
@@ -132,16 +127,10 @@
 #define SYNC_ERR_DESCRIPTION_SERVER "Problem z serwerem"
 #define SYNC_ERR_DESCRIPTION_FILE "Problem z plikiem"
 
-#define CREDITS_PWDER "2026 PWDer od floriano (0.4) >"
+#define CREDITS_PWDER "PWDer 0.5 \"Untangled\" >"
 #define CREDITS_WEBSITE "< Zobacz moja strone! >"
-#define CREDITS_AES128 "< Biblioteka AES128 >"
-#define CREDITS_TOTP "< Biblioteka TOTP >"
-#define CREDITS_BASE32 "< Biblioteka Base32"
 #define CREDITS_PWDER_GITHUB "adamecki/PWDer na GitHub"
 #define CREDITS_WEBSITE_LINK "floriano.uk"
-#define CREDITS_AES128_GITHUB "josephpal/esp32-Encrypt na GitHub"
-#define CREDITS_TOTP_GITHUB "lucadentella/TOTP-Arduino na GitHub"
-#define CREDITS_BASE32_GITHUB "dirkx/Arduino-Base32-Decode na GitHub"
 
 #define PWIMPORT_REPLACE_PASSWORDS "Zastapic obecne hasla?"
 
@@ -149,11 +138,6 @@
 
 #define SDCARD_NOT_FOUND_TITLE "Blad"
 #define SDCARD_NOT_FOUND_DESCRIPTION "Nie znaleziono karty SD!"
-
-#define INTEGRITY_CHECK_FAILED_LINE1 "Problem z weryfikacja integralnosci sejfu."
-#define INTEGRITY_CHECK_FAILED_LINE2 "Jego pliki mogly zostac zmodyfikowane."
-#define INTEGRITY_CHECK_FAILED_LINE3 "Zaimportuj ponownie swoje hasla"
-#define INTEGRITY_CHECK_FAILED_LINE4 "lub przywroc sejf z kopii zapasowej."
 
 #define SAMPLE_ENTRY "Przykladowy wpis"
 #define SAMPLE_USERNAME "przykladowa_nazwa_uzytkownika"

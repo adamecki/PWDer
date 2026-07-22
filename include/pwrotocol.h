@@ -1,5 +1,5 @@
 // pwrotocol - PWDer protocol for KeePass communication
-// version 0.1
+// version 0.5
 // let's see
 
 #define PWROTOCOL_TIMEOUT_MS            10000
@@ -11,6 +11,6 @@
 #define PWROTOCOL_FILE_IMPORT           0x04
 #define PWROTOCOL_REQUEST_CONF          0x05
 
-#define PWROTOCOL_CHUNK_SIZE            4096 // bytes
+#define PWROTOCOL_CHUNK_SIZE            64 // bytes
 
 void pwrotocol_listen_and_respond();

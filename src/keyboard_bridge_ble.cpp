@@ -1,38 +1,59 @@
 #include <Arduino.h>
 #include "keyboard_bridge.h"
-#include <BleKeyboard.h>
+#include "asciimap.h"
 
-BleKeyboard bleKeyboard;
+#include <BleCompositeHID.h>
+#include <KeyboardDevice.h>
+
+BleCompositeHID compositeHID("Cardputer", "M5Stack", 100);
+BLEHostConfiguration bleHostConfig;
+KeyboardDevice* bleKeyboard;
 
 static uint8_t to_ble_code(special_key k) {
     switch(k) {
-        case special_key::RETURN: return KEY_RETURN;
+        case special_key::RETURN: return KEY_ENTER;
         case special_key::TAB:    return KEY_TAB;
     }
 }
 
 void ble_keyboard_init() {
-    bleKeyboard.begin();
-}
+    bleHostConfig.setHidType(HID_KEYBOARD);
 
-void ble_keyboard_end() {
-    bleKeyboard.end();
+    bleKeyboard = new KeyboardDevice();
+    compositeHID.addDevice(bleKeyboard);
+    compositeHID.begin(bleHostConfig);
 }
 
 bool ble_keyboard_ready() {
-    return bleKeyboard.isConnected();
+    return compositeHID.isConnected();
 }
 
 void ble_send_key(special_key k) {
-    bleKeyboard.press(to_ble_code(k));
+    bleKeyboard->keyPress(to_ble_code(k));
     delay(25);
-    bleKeyboard.releaseAll();
+    bleKeyboard->keyRelease(to_ble_code(k));
     delay(25);
 }
 
 void ble_send_key(char c) {
-    bleKeyboard.press(c);
+    uint8_t ascii = (uint8_t)c;
+    if(ascii > 127) { return; }
+
+    keymap map = ascii_to_hid[ascii];
+    if(map.usage_id == 0) { return; }
+
+    if (map.shift) {
+        bleKeyboard->modifierKeyPress(KEY_MOD_LSHIFT);
+    }
+    
+    bleKeyboard->keyPress(map.usage_id);
     delay(25);
-    bleKeyboard.releaseAll();
+    
+    bleKeyboard->keyRelease(map.usage_id);
     delay(25);
+
+    if (map.shift) {
+        bleKeyboard->modifierKeyRelease(KEY_MOD_LSHIFT);
+        delay(25);
+    }
 }

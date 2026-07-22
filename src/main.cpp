@@ -35,9 +35,9 @@ int device_mode = 1;
 // 1 - device locked
 // 2 - help page
 // 3 - options page
-// 4 - sync page
+// 4 - sync page (unused for now)
 // 5 - credits page
-// 6 - file import page
+// 6 - file import page (deprecated)
 // 7 - search
 
 int mode0_selection = 1;

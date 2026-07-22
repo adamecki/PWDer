@@ -18,6 +18,10 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Support for TOTP two-factor authentication
 - Fun, simple design
 
+# Limitations
+- Currently, only ASCII characters are supported
+- Simultaneous use of Wi-Fi and Bluetooth is impossible. If you want to use 2FA with Bluetooth, please use M5Unit RTC.
+
 # Setting it up
 ## Prerequisites
 - I highly recommend using [Launcher](https://github.com/bmorcelli/Launcher) for running the program. However, it can be flashed and used directly too.
