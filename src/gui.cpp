@@ -14,6 +14,7 @@ extern bool rtc_available;
 extern bool totp_available;
 extern char totp_buffer[7];
 extern int8_t last_battery_percentage;
+extern uint8_t* motd_number;
 
 extern int device_mode;
 extern int mode2_page;
@@ -62,6 +63,9 @@ void splash_screen() {
 
   canvas.setTextSize(1);
   canvas.drawString(PWDER_VERSION, 224, 68);
+
+  canvas.setTextDatum(top_center);
+  canvas.drawString(motd[motd_number[0]], M5Cardputer.Display.width() / 2, 4);
 
   canvas.pushSprite(0, 0);
 }

@@ -34,6 +34,7 @@ char totp_buffer[7];
 bool rtc_available = false;
 rtc_time_type rtc_time;
 rtc_date_type rtc_date;
+uint8_t* motd_number = new uint8_t[1];
 
 int8_t last_battery_percentage;
 unsigned long last_ui_refresh;
@@ -105,6 +106,9 @@ void setup() {
   canvas.setFont(&fonts::Font2);
   canvas.setTextColor(WHITE);
   canvas.setTextSize(1);
+
+  esp_fill_random(motd_number, sizeof(uint8_t));
+  motd_number[0] /= 8;
 
   splash_screen();
 

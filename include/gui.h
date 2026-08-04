@@ -21,6 +21,42 @@ namespace pwder_style {
     };
 }
 
+// spoiler alert
+const String motd[32] PROGMEM = {
+    "Papa Whiskey Delta echo romeo",
+    "Don't give 'em the SSH keys!",
+    "username: admin, password: admin",
+    "Can a Cardputer run Forza Horizon?",
+    "Pow-There!",
+    "2+2=5, trust me bro",
+    "Corny sunglasses, not gonna lie",
+    "100% NO AI",
+    "What is the definition of insanity?",
+    "Click here to add text",
+    "Password must be 8.5 characters long",
+    "I'm sorry if it crashed",
+    "sudo touch grass",
+    "Now works with smart fridges",
+    "PWDer Holy-C port, anyone?",
+    "Manager, yet all passwords the same",
+    "At least one person uses it",
+    "I dare you to beatbox right now",
+    "You picked the wrong Cardputer, fool",
+    "encrypted = encrypt(decrypted);",
+    "Hello Reddit!",
+    "This line of text is called MOTD",
+    "Make sure nobody's looking!",
+    "Linux users when viewing file: ^._.^",
+    "sudo rm -rf /",
+    "PWDer in Germany: Der PWDer",
+    "Don't lose it!",
+    "ssh $USER@localhost",
+    "I got a card, I got a puter...",
+    "Also try geo-tp's Password Manager",
+    "This is not Windows 95",
+    "Probably doesn't beat Touch ID",
+};
+
 const int color_schemes_number = 7;
 const pwder_style::color_scheme pwcolors[7] PROGMEM = {
     {
