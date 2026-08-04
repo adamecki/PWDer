@@ -10,7 +10,7 @@ and in order to not break your tongue, you can pronounce it as "Powder".
 
 <br>
 
-<img src="./assets/photos/pwder-device.jpg" alt="PWDer on a Cardputer" width="40%">
+<img src="./assets/photos/pwder-device.jpg" alt="PWDer on a Cardputer" width="480px">
 
 It started as an idea to solve the problem of the meticulous process of logging into personal accounts on different public computers (like school or work), where you don't have your password manager. It simulates a keyboard, entering the passwords for you into every computer you plug it in to. I thought of portable / cloud password managers only when I was halfway through doing this project, so I decided to continue it.
 # Key functionalities
@@ -84,11 +84,11 @@ Windows:
 python sync.py C:\your\database.kdbx
 ```
 
-<img src="./assets/photos/pyscript.webp" alt="Password synchronization script" width="40%">
+<img src="./assets/photos/pyscript.webp" alt="Password synchronization script" width="480px">
 
 - The script will prompt you for both your KDBX password and PWDer password. Enter them and then press Y on the Cardputer to import your vault.
 
-<img src="./assets/photos/import.jpg" alt="Passwords found" width="40%">
+<img src="./assets/photos/import.jpg" alt="Passwords found" width="480px">
 
 <b>Remember that your user should have the serial port privileges (like belonging to the `dialout` group on Linux)!</b>
 
@@ -131,7 +131,7 @@ PWDer can simulate a Bluetooth keyboard to input passwords to your computer with
 ### Usage
 Press B on Cardputer's main screen. The device should instantly become visible to a computer.
 
-<img src="./assets/photos/bluetooth-computer.png" alt="Bluetooth 1" width="40%">
+<img src="./assets/photos/bluetooth-computer.png" alt="Bluetooth 1" width="480px">
 
 Connect, and PWDer should display a Bluetooth icon in the top right corner.
 
@@ -156,7 +156,7 @@ If you have an M5Unit RTC, connect it to Cardputer's Grove connector before star
 
 <img src="./assets/photos/otp.bmp" alt="TOTP is here" width="480px">
 
-<img src="./photos/m5unitrtc.webp" alt="M5Unit RTC attached to a Cardputer" width="40%">
+<img src="./assets/photos/m5unitrtc.webp" alt="M5Unit RTC attached to a Cardputer" width="480px">
 
 If your RTC clock is not set correctly, you can synchronize its time with network in the Options (look below). In the future, setting time manually will also be possible.
 
@@ -168,7 +168,7 @@ The Cardputer can to connect to an NTP server via Wi-Fi in order to synchronize 
 With that said, even if you have a TOTP secret in your database, PWDer won't show the TOTP if it doesn't have a time provider. If both RTC and NTP are available, Cardputer uses RTC as the primary time provider, as it is more reliable (works offline).
 
 ### How to add a TOTP secret to my entry?
-<img src="./photos/kptotp.webp" alt="KeePass TOTP settings for an entry" width="40%">
+<img src="./assets/photos/kptotp.webp" alt="KeePass TOTP settings for an entry" width="480px">
 KeePassXC supports TOTP. If a secret key for your entry is set, the Python vault extraction script provided in the `pwder_keepass_sync` directory will find it and place it in your import file for PWDer. Just like passwords, it is stored on the SD card in an encrypted form (excluding the import phase for now).
 
 Otherwise, if you're writing an import file manually, you can add the secret key as the fourth line of each entry, as described earlier.
@@ -234,27 +234,27 @@ Seven default color schemes are available. File `include/gui.h` contains their d
 
 Classic
 
-<img src="./assets/photos/theme1.bmp" alt="Classic Dark" width="480px">
+<img src="./assets/photos/theme2.bmp" alt="Classic Dark" width="480px">
 
 Classic Dark
 
-<img src="./assets/photos/theme1.bmp" alt="Industrial" width="480px">
+<img src="./assets/photos/theme3.bmp" alt="Industrial" width="480px">
 
 Industrial
 
-<img src="./assets/photos/theme1.bmp" alt="Sky" width="480px">
+<img src="./assets/photos/theme4.bmp" alt="Sky" width="480px">
 
 Sky
 
-<img src="./assets/photos/theme1.bmp" alt="Garden" width="480px">
+<img src="./assets/photos/theme5.bmp" alt="Garden" width="480px">
 
 Garden
 
-<img src="./assets/photos/theme1.bmp" alt="Elegant" width="480px">
+<img src="./assets/photos/theme6.bmp" alt="Elegant" width="480px">
 
 Elegant
 
-<img src="./assets/photos/theme1.bmp" alt="L33t H4xx0r" width="480px">
+<img src="./assets/photos/theme7.bmp" alt="L33t H4xx0r" width="480px">
 
 L33t H4xx0r
 
