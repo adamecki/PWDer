@@ -362,8 +362,8 @@ void check_keyboard_events() {
           if(mode3_tempbrightness < 0xFF) {
             mode3_tempbrightness += 0x10;
 
-            if(mode3_tempbrightness & 0xF) {
-              mode3_tempbrightness = (mode3_tempbrightness & ~0xF) | (0xF);
+            if((mode3_tempbrightness & 0xF) != 0xF) {
+              mode3_tempbrightness = mode3_tempbrightness | (0xF);
             }
 
             M5Cardputer.Display.setBrightness(mode3_tempbrightness);

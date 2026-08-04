@@ -133,6 +133,9 @@ void setup() {
   } else {
     pvault::read_config(VAULT_PATH, configuration);
   }
+  if(configuration.brightness < 0x0F) {
+    configuration.brightness = 0x0F;
+  }
   M5Cardputer.Display.setBrightness(configuration.brightness);
   mode3_tempbrightness = configuration.brightness;
 
