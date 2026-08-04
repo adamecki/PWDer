@@ -1,5 +1,8 @@
 #include <Arduino.h>
+#include <M5Cardputer.h>
 #include "keyboard_bridge.h"
+#include "gui.h"
+#include "network_operations.h"
 #include "asciimap.h"
 
 #include <BleCompositeHID.h>
@@ -8,20 +11,36 @@
 BleCompositeHID compositeHID("Cardputer", "M5Stack", 100);
 BLEHostConfiguration bleHostConfig;
 KeyboardDevice* bleKeyboard;
+extern bool network_initialized;
+extern bool bluetooth_initialized;
 
 static uint8_t to_ble_code(special_key k) {
     switch(k) {
         case special_key::RETURN: return KEY_ENTER;
         case special_key::TAB:    return KEY_TAB;
+        default:                  return KEY_TAB;
     }
 }
 
 void ble_keyboard_init() {
+    if(network_initialized) {
+        connection_init_error();
+        delay(3000);
+        draw_ui();
+        return;
+    }
+
     bleHostConfig.setHidType(HID_KEYBOARD);
 
     bleKeyboard = new KeyboardDevice();
     compositeHID.addDevice(bleKeyboard);
     compositeHID.begin(bleHostConfig);
+
+    bluetooth_initialized = true;
+}
+
+void ble_keyboard_update_battery_level() {
+    compositeHID.setBatteryLevel(M5.Power.getBatteryLevel());
 }
 
 bool ble_keyboard_ready() {

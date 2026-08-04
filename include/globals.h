@@ -43,4 +43,4 @@
 
 // UI definitions
 #define UI_UPDATE_MILISECONDS 3000
-#define MODE3_PAGES_NUMBER 9
+#define MODE3_PAGES_NUMBER 8

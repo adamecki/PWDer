@@ -9,5 +9,6 @@ void usb_send_key(char c);
 
 void ble_keyboard_init();
 bool ble_keyboard_ready();
+void ble_keyboard_update_battery_level();
 void ble_send_key(special_key k);
 void ble_send_key(char c);

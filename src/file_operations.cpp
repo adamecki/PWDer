@@ -29,8 +29,8 @@ void init_new_vault() {
 
   configuration.color_scheme = 0;
   configuration.input_mode = 2;
-  configuration.speaker_on = 0;
-  configuration.wifi_timeout = 5;
+  configuration.speaker_on_auto_lock = 2;
+  configuration.brightness = 0xFF;
 
   pvault::init_vault(VAULT_PATH, DEFAULT_PASSWORD, configuration, entries);
 }

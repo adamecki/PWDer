@@ -8,6 +8,7 @@ static uint8_t to_usb_code(special_key k) {
     switch(k) {
         case special_key::RETURN: return KEY_RETURN;
         case special_key::TAB:    return KEY_TAB;
+        default:                  return KEY_TAB;
     }
 }
 

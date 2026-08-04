@@ -2,10 +2,14 @@
 
 #include "file_operations.h"
 #include "gui.h"
+#include "sfx.h"
 #include "icons.h"
 #include "network_operations.h"
 #include "keyboard_bridge.h"
 #include "time_operations.h"
+
+#define BASIC_BRIGHTNESS 0xFF
+extern const int color_schemes_number;
 
 extern M5Canvas canvas;
 extern NTPClient timeClient;
@@ -39,6 +43,8 @@ extern String mode3_tempwpwd;
 extern String mode3_tempaddr;
 extern String mode3_tempport;
 extern String mode3_tempdpwd;
+extern int mode3_tempbrightness;
+
 
 extern int mode5_page;
 const String mode5_interactive_hyperlinks[2] PROGMEM = {"https://github.com/adamecki/PWDer", "https://floriano.uk"};
@@ -48,6 +54,9 @@ extern bool mode7_show_results;
 extern int mode7_index;
 extern int mode7_matches;
 extern int mode7_matchindex[100];
+
+extern int auto_lock;
+extern unsigned long last_action;
 
 void press_with_preferred_keyboard(special_key k) {
   if(ble_keyboard_ready()) {
@@ -66,16 +75,31 @@ void press_with_preferred_keyboard(char c) {
 }
 
 void check_keyboard_events() {
+  if(M5Cardputer.BtnA.wasPressed()) {
+    if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN)) {
+      save_screenshot_bmp();
+      sfx::melody_c_major_scale();
+    } else {
+      // keyboard mode to be introduced
+    }
+  }
+
   if (M5Cardputer.Keyboard.isChange()) {
+    last_action = millis();
+
+    if(auto_lock != 0) {
+      auto_lock = 0;
+      M5Cardputer.Display.setBrightness(BASIC_BRIGHTNESS);
+      return;
+    }
+
     if (mode0_preview && (device_mode == 0 || device_mode == 7)) {
       mode0_preview = false;
       draw_ui();
     }
 
     if (M5Cardputer.Keyboard.isPressed()) {
-      if (configuration.speaker_on == 1 && device_mode != 1) {
-        M5Cardputer.Speaker.tone(8000, 20);
-      }
+      if (device_mode != 1) { sfx::beep(); }
 
       // for complex typing modes
       Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -84,10 +108,10 @@ void check_keyboard_events() {
       switch (device_mode) {
       case 0:
         if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          if(configuration.speaker_on == 1) {
-            configuration.speaker_on = 0;
+          if(configuration.speaker_on_auto_lock & 1) {
+            configuration.speaker_on_auto_lock -= 1;
           } else {
-            configuration.speaker_on = 1;
+            configuration.speaker_on_auto_lock += 1;
           }
 
           pvault::update_config(VAULT_PATH, configuration);
@@ -98,7 +122,7 @@ void check_keyboard_events() {
         } else if (M5Cardputer.Keyboard.isKeyPressed('h')) { // help
           device_mode = 2;
           draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('c')) { // credits
+        } else if (M5Cardputer.Keyboard.isKeyPressed('c')) { // about
           device_mode = 5;
           draw_ui();
         } else if(M5Cardputer.Keyboard.isKeyPressed('b')) { // enable bluetooth keyboard
@@ -210,8 +234,16 @@ void check_keyboard_events() {
           }
 
           if (status.enter) {
+            splash_screen();
+            splash_screen_create_progressbar();
+            delay(250);
+            splash_screen_update_progressbar_percentage(10);
+
             // verify password
             if(pvault::get_key(VAULT_PATH, mode1_passwordinput, mode1_newpassword_tempkey)) {
+              splash_screen_update_progressbar_percentage(33);
+              delay(250);
+
               // password ok
               if(mode1_ispasswordbeingchanged) {
                 // change password
@@ -220,6 +252,10 @@ void check_keyboard_events() {
                 // obtain new key
                 memcpy(aes_key, mode1_newpassword_tempkey, pvault::key_size);
 
+                splash_screen_update_progressbar_percentage(100);
+                delay(250);
+
+                mode3_tempdpwd = "";
                 device_mode = 0;
                 draw_ui();
                 push_icon(ok, 4, 4, 1);
@@ -237,15 +273,22 @@ void check_keyboard_events() {
                 // if(SD.exists(IMPORT_FILE_PATH)) {
                 //   device_mode = 6;
                 // } else {
-                  device_mode = 0;
-                  if(String(entries.credentials[mode0_selection].totp_secret) != "") { totp_available = true; }
+                device_mode = 0;
+                if(String(entries.credentials[mode0_selection].totp_secret) != "") { totp_available = true; }
                 // }
+
+                splash_screen_update_progressbar_percentage(100);
+                delay(250);
 
                 draw_ui();
               }
             } else {
+              splash_screen_update_progressbar_percentage(33);
+              delay(250);
+
               // wrong password
               if(mode1_ispasswordbeingchanged) {
+                mode3_tempdpwd = "";
                 device_mode = 3;
                 draw_ui();
               } else {
@@ -254,6 +297,7 @@ void check_keyboard_events() {
               }
               push_icon(error, 4, 4, 1);
               canvas.pushSprite(0, 0);
+              delay(250);
             }
 
             mode1_passwordinput = "";
@@ -264,19 +308,26 @@ void check_keyboard_events() {
 
       case 2:
         if (M5Cardputer.Keyboard.isKeyPressed('`')) {
-          device_mode = 0;
-          draw_ui();
+          if((mode2_page != 1) || (mode2_page == 1 && M5Cardputer.Keyboard.isKeyPressed(KEY_FN))) {
+            // challenge user to learn FN + ESC/arrows combinations
+            device_mode = 0;
+            draw_ui();
+          }
         } else if (M5Cardputer.Keyboard.isKeyPressed(',') && mode2_page > 0) {
-          mode2_page--;
-          draw_ui();
-        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode2_page < 4) {
-          mode2_page++;
-          draw_ui();
+          if((mode2_page != 1) || (mode2_page == 1 && M5Cardputer.Keyboard.isKeyPressed(KEY_FN))) {
+            mode2_page--;
+            draw_ui();
+          }
+        } else if (M5Cardputer.Keyboard.isKeyPressed('/') && mode2_page < 10) {
+          if((mode2_page != 1) || (mode2_page == 1 && M5Cardputer.Keyboard.isKeyPressed(KEY_FN))) {
+            mode2_page++;
+            draw_ui();
+          }
         } else if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          if(configuration.speaker_on == 1) {
-            configuration.speaker_on = 0;
+          if(configuration.speaker_on_auto_lock & 1) {
+            configuration.speaker_on_auto_lock -= 1;
           } else {
-            configuration.speaker_on = 1;
+            configuration.speaker_on_auto_lock += 1;
           }
 
           pvault::update_config(VAULT_PATH, configuration);
@@ -291,9 +342,11 @@ void check_keyboard_events() {
         if (M5Cardputer.Keyboard.isKeyPressed('`') && (M5Cardputer.Keyboard.isKeyPressed(KEY_FN) || mode3_page == 0)) {
           mode3_tempssid = String(entries.credentials[0].title);
           mode3_tempwpwd = String(entries.credentials[0].username);
-          mode3_tempaddr = String(entries.credentials[0].password);
-          mode3_tempport = String(entries.credentials[0].totp_secret);
           mode3_tempdpwd = "";
+          mode3_tempbrightness = configuration.brightness;
+          M5Cardputer.Display.setBrightness(configuration.brightness);
+          // mode3_tempaddr = String(entries.credentials[0].password);
+          // mode3_tempport = String(entries.credentials[0].totp_secret);
 
           device_mode = 0;
           draw_ui();
@@ -305,23 +358,39 @@ void check_keyboard_events() {
                    mode3_page < MODE3_PAGES_NUMBER - 1) {
           mode3_page++;
           draw_ui();
+        } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed(';') && mode3_page == 0) {
+          if(mode3_tempbrightness < 0xFF) {
+            mode3_tempbrightness += 0x10;
+
+            if(mode3_tempbrightness & 0xF) {
+              mode3_tempbrightness = (mode3_tempbrightness & ~0xF) | (0xF);
+            }
+
+            M5Cardputer.Display.setBrightness(mode3_tempbrightness);
+            draw_ui();
+          }
+        } else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN) && M5Cardputer.Keyboard.isKeyPressed('.') && mode3_page == 0) {
+          if(mode3_tempbrightness > 0x0F) {
+            mode3_tempbrightness -= 0x10;
+
+            if(mode3_tempbrightness & 0xF) {
+              mode3_tempbrightness = (mode3_tempbrightness & ~0xF) | (0xF);
+            }
+
+            M5Cardputer.Display.setBrightness(mode3_tempbrightness);
+            draw_ui();
+          }
         } else {
           for (auto i : status.word) {
             switch (mode3_page) {
-            case 1:
+            case 4:
+              mode3_tempdpwd += i;
+              break;
+            case 6:
               mode3_tempssid += i;
               break;
-            case 2:
+            case 7:
               mode3_tempwpwd += i;
-              break;
-            case 3:
-              mode3_tempaddr += i;
-              break;
-            case 4:
-              mode3_tempport += i;
-              break;
-            case 5:
-              mode3_tempdpwd += i;
               break;
             default:
               break;
@@ -331,20 +400,14 @@ void check_keyboard_events() {
 
           if (status.del) {
             switch (mode3_page) {
-            case 1:
+            case 4:
+              mode3_tempdpwd.remove(mode3_tempdpwd.length() - 1);
+              break;
+            case 6:
               mode3_tempssid.remove(mode3_tempssid.length() - 1);
               break;
-            case 2:
+            case 7:
               mode3_tempwpwd.remove(mode3_tempwpwd.length() - 1);
-              break;
-            case 3:
-              mode3_tempaddr.remove(mode3_tempaddr.length() - 1);
-              break;
-            case 4:
-              mode3_tempport.remove(mode3_tempport.length() - 1);
-              break;
-            case 5:
-              mode3_tempdpwd.remove(mode3_tempdpwd.length() - 1);
               break;
             default:
               break;
@@ -354,7 +417,7 @@ void check_keyboard_events() {
 
           if (status.enter) {
             switch (mode3_page) {
-            case 0:
+            case 1:
               switch (configuration.input_mode) {
               case 0:
                 configuration.input_mode = 1;
@@ -368,28 +431,33 @@ void check_keyboard_events() {
               }
               draw_ui();
               break;
-            case 1:
             case 2:
-            case 3:
-            case 4:
-              strncpy(init_cred.title, (char*)mode3_tempssid.c_str(), sizeof(init_cred.title));
-              strncpy(init_cred.username, (char*)mode3_tempwpwd.c_str(), sizeof(init_cred.username));
-              strncpy(init_cred.password, (char*)mode3_tempaddr.c_str(), sizeof(init_cred.password));
-              strncpy(init_cred.totp_secret, (char*)mode3_tempport.c_str(), sizeof(init_cred.totp_secret));
+              switch(configuration.speaker_on_auto_lock) {
+                case 0:
+                case 1:
+                  configuration.speaker_on_auto_lock += 2;
+                  break;
+                case 2:
+                case 3:
+                  configuration.speaker_on_auto_lock -= 2;
+                  break;
+                default:
+                  break;
+              }
               break;
-            case 5:
+            case 3:
+              if(configuration.color_scheme >= color_schemes_number - 1) {
+                configuration.color_scheme = 0;
+              } else {
+                configuration.color_scheme += 1;
+              }
+              break;
+            case 4:
               mode1_ispasswordbeingchanged = true;
               device_mode = 1;
               draw_ui();
               break;
-            case 6:
-              if (configuration.wifi_timeout < 15) {
-                configuration.wifi_timeout++;
-              } else {
-                configuration.wifi_timeout = 0;
-              }
-              break;
-            case 7:
+            case 5:
               if (rtc_available) {
                 if (!network_available) {
                   retry_connection();
@@ -411,16 +479,16 @@ void check_keyboard_events() {
                 draw_ui();
               }
               break;
-            case 8:
-              export_vault();
-              push_icon(ok, 4, 4, 1);
-              canvas.pushSprite(0, 0);
+            case 6:
+            case 7:
+              strncpy(init_cred.title, (char*)mode3_tempssid.c_str(), sizeof(init_cred.title));
+              strncpy(init_cred.username, (char*)mode3_tempwpwd.c_str(), sizeof(init_cred.username));
               break;
             default:
               break;
             }
             // things that need rewriting encrypted data
-            if(mode3_page == 1 || mode3_page == 2 || mode3_page == 3 || mode3_page == 4) {
+            if(mode3_page == 6 || mode3_page == 7) {
               entries.credentials[0] = init_cred;
               pvault::update_vault(VAULT_PATH, aes_key, configuration, entries);
               draw_ui();
@@ -428,13 +496,15 @@ void check_keyboard_events() {
               canvas.pushSprite(0, 0);
             }
             // things that need rewriting header only
-            if(mode3_page == 0 || mode3_page == 6) {
+            if(mode3_page == 0 || mode3_page == 1 || mode3_page == 2 || mode3_page == 3) {
+              configuration.brightness = mode3_tempbrightness;
               pvault::update_config(VAULT_PATH, configuration);
               draw_ui();
               push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
             }
-            if(mode3_page == 7) {
+            // things that just need graphical confirmation
+            if(mode3_page == 5) {
               draw_ui();
               push_icon(ok, 4, 4, 1);
               canvas.pushSprite(0, 0);
@@ -445,10 +515,10 @@ void check_keyboard_events() {
 
       case 5:
         if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-          if(configuration.speaker_on == 1) {
-            configuration.speaker_on = 0;
+          if(configuration.speaker_on_auto_lock & 1) {
+            configuration.speaker_on_auto_lock -= 1;
           } else {
-            configuration.speaker_on = 1;
+            configuration.speaker_on_auto_lock += 1;
           }
 
           pvault::update_config(VAULT_PATH, configuration);
@@ -496,13 +566,20 @@ void check_keyboard_events() {
             device_mode = 1;
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-            if(configuration.speaker_on == 1) {
-              configuration.speaker_on = 0;
+            if(configuration.speaker_on_auto_lock & 1) {
+              configuration.speaker_on_auto_lock -= 1;
             } else {
-              configuration.speaker_on = 1;
+              configuration.speaker_on_auto_lock += 1;
             }
 
             pvault::update_config(VAULT_PATH, configuration);
+            draw_ui();
+          } else if(M5Cardputer.Keyboard.isKeyPressed('b')) { // enable bluetooth keyboard
+            ble_keyboard_init();
+          } else if(M5Cardputer.Keyboard.isKeyPressed('n')) { // retry network connection
+            retry_connection();
+          } else if (M5Cardputer.Keyboard.isKeyPressed('h')) { // help
+            device_mode = 2;
             draw_ui();
           } else if (M5Cardputer.Keyboard.isKeyPressed('t')) { // press TAB on a computer
             press_with_preferred_keyboard(special_key::TAB);

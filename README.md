@@ -6,14 +6,18 @@ PWDer is a simple password manager for the M5Cardputer. Its name is a combinatio
 
 and in order to not break your tongue, you can pronounce it as "Powder".
 
-<img src="./photos/main.webp" alt="main" width="40%">
+<img src="./assets/photos/pwder.bmp" alt="PWDer's splash screen" width="480px">
 
-It started as an idea to solve the problem of the meticulous process of logging into personal accounts on different public computers (like school or work), where you don't have your password manager. It simulates a USB keyboard, entering the passwords for you into every computer you plug it in to. I thought of portable / cloud password managers only when I was halfway through doing this project, so I decided to continue it.
+<br>
+
+<img src="./assets/photos/pwder-device.jpg" alt="PWDer on a Cardputer" width="40%">
+
+It started as an idea to solve the problem of the meticulous process of logging into personal accounts on different public computers (like school or work), where you don't have your password manager. It simulates a keyboard, entering the passwords for you into every computer you plug it in to. I thought of portable / cloud password managers only when I was halfway through doing this project, so I decided to continue it.
 # Key functionalities
-- Storing up to 100 passwords using AES128 encryption
+- Storing up to 100 login + password + otp entries using AES128 encryption
 - Protection with master password (PBKDF2 key derivation)
 - Searching for passwords by entry name
-- Automatic password input to your computer using USB cable
+- Automatic password input to your computer using USB cable or Bluetooth
 - Synchronizing with .kdbx (KeePass) files over USB cable
 - Support for TOTP two-factor authentication
 - Fun, simple design
@@ -80,35 +84,66 @@ Windows:
 python sync.py C:\your\database.kdbx
 ```
 
-<img src="./photos/pyscript.webp" alt="Password synchronization script" width="40%">
+<img src="./assets/photos/pyscript.webp" alt="Password synchronization script" width="40%">
 
 - The script will prompt you for both your KDBX password and PWDer password. Enter them and then press Y on the Cardputer to import your vault.
 
-<img src="./photos/import.webp" alt="Passwords found" width="40%">
+<img src="./assets/photos/import.jpg" alt="Passwords found" width="40%">
 
 <b>Remember that your user should have the serial port privileges (like belonging to the `dialout` group on Linux)!</b>
 
 # Usage
 ## Main screen
-This is where you can select a password to enter.
+This is where you can select a password to enter. The top bar represents the vault usage in %, and the bottom one is a scrollbar.
 
-<img src="./photos/network.webp" alt="main" width="40%">
+<img src="./assets/photos/no-otp.bmp" alt="main" width="480px">
 
-Press the arrow keys to navigate, and hold down V to preview the username and password you're about to enter. Connect the Cardputer to your computer and do one of these things:
+
+Press the arrow keys to navigate, and hold down V to preview the password / OTP you're about to enter. Other keybinds:
+
 - `1` - enter the username for currently selected entry
 - `2` - enter the password
 - `3` - enter the username, then press TAB, then enter the password, and then press Enter
 - `4` - enter current TOTP
 - `Enter` - perform one of these three actions, depending on the selection made in Options.
-- `V` - hold to preview username, password and TOTP
+
 - `T` - simulate pressing TAB on the computer.
 - `R` - simulate pressing Enter on the computer.
+
 - `M` - mute or unmute the speaker. The default state for the speaker is muted.
 - `L` - lock the device. Alternatively, you can just reset the device.
-- `N` - connect (or reconnect) Wi-Fi, usually after changing Wi-Fi settings in Options.
+
+- `N` - connect (or reconnect) Wi-Fi
+- `B` - enable Bluetooth connectivity (only one of Wi-Fi / Bluetooth can work at the same time)
+
 - `O` - open Options.
-- `C` - open Credits.
+- `C` - open About page.
 - `Q` - open Search menu (press Fn+Esc to exit)
+
+- `FN` + `Top button` - screenshot (will be saved as BMP in the SD card root directory)
+
+If navigating with Arrow keys / Esc doesn't work, press FN alongside them.
+
+## Bluetooth
+### Introduction
+PWDer can simulate a Bluetooth keyboard to input passwords to your computer without a cable.
+
+### Usage
+Press B on Cardputer's main screen. The device should instantly become visible to a computer.
+
+<img src="./assets/photos/bluetooth-computer.png" alt="Bluetooth 1" width="40%">
+
+Connect, and PWDer should display a Bluetooth icon in the top right corner.
+
+<img src="./assets/photos/bluetooth.bmp" alt="Bluetooth 2" width="480px">
+
+Remember that currently using Wi-Fi and Bluetooth simultaneously in PWDer is currently impossible. If you encounter an error enabling Wi-Fi or Bluetooth, restart PWDer and enable only the connectivity you intend to use at the time.
+
+### Connecting to a new device
+Forget the device on any connected host and restart PWDer, enabling Bluetooth. It should be visible in the devices list again.
+
+### Disclaimer
+Keep in mind that every wireless connection is captured with much more ease than a wired one. Use Bluetooth only in safe environments, and at your own risk!
 
 ## TOTP
 ### Introduction
@@ -119,7 +154,7 @@ Neither ESP32, nor Cardputer do have an RTC backup battery to keep the time corr
 ### First solution: M5Unit RTC
 If you have an M5Unit RTC, connect it to Cardputer's Grove connector before starting PWDer. It will detect the unit and display a small clock icon in the top right corner. It means that Cardputer is using RTC for generating TOTP.
 
-<img src="./photos/totpishere.webp" alt="TOTP is here" width="40%">
+<img src="./assets/photos/otp.bmp" alt="TOTP is here" width="480px">
 
 <img src="./photos/m5unitrtc.webp" alt="M5Unit RTC attached to a Cardputer" width="40%">
 
@@ -139,54 +174,89 @@ KeePassXC supports TOTP. If a secret key for your entry is set, the Python vault
 Otherwise, if you're writing an import file manually, you can add the secret key as the fourth line of each entry, as described earlier.
 
 ### Where do I find the TOTP in PWDer's UI?
-<img src="./photos/totpishere.webp" alt="TOTP is here" width="40%">
+<img src="./assets/photos/preview.bmp" alt="TOTP is here" width="480px">
 If the NTP requirements are met and your entry has a TOTP secret set, the entry title will be blue. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
 
 ## Lock screen
 Here you have to enter the correct password (then press OK) to access the device. If you've locked yourself out, you can remove the `pwder/config` file from the SD card (the password will be "default" again), but keep in mind that all your saved passwords and configuration will disappear!
 
-<img src="./photos/lock.webp" alt="lock" width="40%">
+<img src="./assets/photos/password.bmp" alt="lock" width="480px">
 
-## Help screen
-A help screen is a quick guide to all the keybindings. Press the arrow keys / esc to navigate.
+## Handbook
+The handbook is a quick guide to all the keybindings. Press the arrow keys / esc to navigate.
 
-<img src="./photos/help.webp" alt="help" width="40%">
+<img src="./assets/photos/handbook.bmp" alt="handbook" width="480px">
 
-## Options screen
-Press O to open the options screen.
+## Options
+Press O to open the options.
 
-<img src="./photos/opts1.webp" alt="opts2" width="40%">
+<img src="./assets/photos/opts1.bmp" alt="opts1" width="480px">
 
-Press enter to switch between default password input modes.
+Press FN + Arrow keys to change the brightness. Remember that you need to apply this setting with Enter!
 
-<img src="./photos/opts2.webp" alt="opts2" width="40%">
+<img src="./assets/photos/opts2.bmp" alt="opts2" width="480px">
 
-On pages that require typing, you need to hold FN when pressing arrow keys / esc to navigate. On the photo above you can see the little tick mark in the top left corner - it means that the setting has been saved.
+Press Enter to switch between default credential input modes.
 
-<img src="./photos/opts3.webp" alt="opts3" width="40%">
+<img src="./assets/photos/opts3.bmp" alt="opts3" width="480px">
 
-<img src="./photos/opts4.webp" alt="opts4" width="40%">
+Press Enter to switch the inactivity lock on or off. The screen will dim after 15s, go blank after 20s and lock itself after 30s of inactivity.
 
-<img src="./photos/opts5.webp" alt="opts5" width="40%">
+<img src="./assets/photos/opts4.bmp" alt="opts4" width="480px">
 
-<img src="./photos/opts6.webp" alt="opts5" width="40%">
+Press Enter to switch color schemes. Look below to see the available ones.
 
-<img src="./photos/opts7.webp" alt="opts5" width="40%">
+<img src="./assets/photos/opts5.bmp" alt="opts5" width="480px">
 
-<img src="./photos/opts8.webp" alt="opts5" width="40%">
+Here you can change the device's master password. Type it, press Enter, then enter the old password.
+
+<img src="./assets/photos/opts6.bmp" alt="opts6" width="480px">
 
 Here you can synchronize the time with NTP for the M5Unit RTC. Notice that the time shown is UTC, not local time!
 
-<img src="./photos/opts9.webp" alt="opts5" width="40%">
+<img src="./assets/photos/opts7.bmp" alt="opts7" width="480px">
 
-Pressing enter will make a `pwexport` file appear in the root directory of your SD card. It will be removed the next run if it wasn't deleted from the SD card before.
+Wi-Fi SSID for NTP connection.
 
-After changing a property, press Enter to save it. Additionally, after changing the device password, you'll be prompred to enter the current password. Press FN+Esc or enter an incorrect password to cancel the procedure.
+<img src="./assets/photos/opts8.bmp" alt="opts8" width="480px">
 
-## Credits screen
+Wi-Fi password for NTP connection.
+
+## About page
 Press the arrow keys / esc to navigate. Pressing Enter will input the link to the selected thing (preferably to the browser).
 
-<img src="./photos/credits.webp" alt="credits" width="40%">
+<img src="./assets/photos/about.bmp" alt="about" width="480px">
+
+## Repaint PWDer!
+Seven default color schemes are available. File `include/gui.h` contains their definitions.
+
+<img src="./assets/photos/theme1.bmp" alt="Classic" width="480px">
+
+Classic
+
+<img src="./assets/photos/theme1.bmp" alt="Classic Dark" width="480px">
+
+Classic Dark
+
+<img src="./assets/photos/theme1.bmp" alt="Industrial" width="480px">
+
+Industrial
+
+<img src="./assets/photos/theme1.bmp" alt="Sky" width="480px">
+
+Sky
+
+<img src="./assets/photos/theme1.bmp" alt="Garden" width="480px">
+
+Garden
+
+<img src="./assets/photos/theme1.bmp" alt="Elegant" width="480px">
+
+Elegant
+
+<img src="./assets/photos/theme1.bmp" alt="L33t H4xx0r" width="480px">
+
+L33t H4xx0r
 
 # Other languages
 - Polish is available. To change a language, recompile PWDer with `#define lang_pl` instead of default `#define lang_en` in line 23 of the file `include/globals.h`.

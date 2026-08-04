@@ -37,9 +37,9 @@ namespace pvault {
 
     // unencrypted settings in header
     struct device_settings {
-        uint8_t speaker_on;
+        uint8_t speaker_on_auto_lock; // speaker on bit, then auto lock bit
         uint8_t input_mode;
-        uint8_t wifi_timeout;
+        uint8_t brightness;
         uint8_t color_scheme;
     };
 

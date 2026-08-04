@@ -1,14 +1,60 @@
 #include "globals.h"
+#include "keyboard_bridge.h"
 #include "gui.h"
 
 extern NTPClient timeClient;
 extern bool network_available;
 extern int device_mode;
 extern int mode4_page;
+extern bool network_initialized;
+extern bool bluetooth_initialized;
 
 extern pvault::vault entries;
-extern pvault::device_settings configuration;
+const int wifi_timeout = 5;
 
+void retry_connection(bool reconnect = true) {
+  if(bluetooth_initialized) {
+      connection_init_error();
+      delay(3000);
+      draw_ui();
+      return;
+  }
+
+  if (reconnect) {
+    timeClient.end();
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_OFF);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    delay(100);
+  }
+
+  if (wifi_timeout != 0) {
+    WiFi.begin(entries.credentials[0].title, entries.credentials[0].username);
+
+    int timeout_500ms = 0;
+
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      timeout_500ms++;
+      if (timeout_500ms >= (2 * wifi_timeout)) {
+        break;
+      }
+    }
+
+    network_available = false;
+
+    if (timeout_500ms < (2 * wifi_timeout)) {
+      network_available = true;
+      timeClient.begin();
+    }
+  }
+
+  network_initialized = true;
+}
+
+/*
 void read_response(WiFiClient* client, String& lines) {
   unsigned long timeout = millis();
   while (client->available() == 0) {
@@ -26,38 +72,6 @@ void read_response(WiFiClient* client, String& lines) {
 
   while (client->available()) {
     lines += client->readStringUntil('\r');
-  }
-}
-
-void retry_connection(bool reconnect = true) {
-  if (reconnect) {
-    WiFi.disconnect(true);
-    delay(100);
-    WiFi.mode(WIFI_OFF);
-    delay(100);
-    WiFi.mode(WIFI_STA);
-    delay(100);
-  }
-
-  if (configuration.wifi_timeout != 0) {
-    WiFi.begin(entries.credentials[0].title, entries.credentials[0].username);
-
-    int timeout_500ms = 0;
-
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      timeout_500ms++;
-      if (timeout_500ms >= (2 * configuration.wifi_timeout)) {
-        break;
-      }
-    }
-
-    network_available = false;
-
-    if (timeout_500ms < (2 * configuration.wifi_timeout)) {
-      network_available = true;
-      timeClient.begin();
-    }
   }
 }
 
@@ -149,3 +163,4 @@ void net_password_import() {
     return;
   }
 }
+*/
