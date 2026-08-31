@@ -1,0 +1,9 @@
+[submodule "lib/Arduino-Base32-Decode"]
+	path = lib/Arduino-Base32-Decode
+	url = https://github.com/dirkx/Arduino-Base32-Decode
+[submodule "lib/Callback"]
+	path = lib/Callback
+	url = https://github.com/tomstewart89/Callback
+[submodule "lib/ESP32-BLE-CompositeHID"]
+	path = lib/ESP32-BLE-CompositeHID
+	url = https://github.com/Mystfit/ESP32-BLE-CompositeHID
