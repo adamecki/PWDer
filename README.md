@@ -46,22 +46,6 @@ git submodule init
 
 - Open cloned directory in PlatformIO. The IDE should pull required libraries automatically.
 - Build the program and either upload it to the device or find its binary (`PROJECT_DIR/pio/build/m5stack-stamps3/firmware.bin`).
-
-### Important
-While compiling, you may encounter a compilation error like this:
-```
-lib/ESP32-BLE-CompositeHID/DualSenseGamepadDevice.cpp: In memberfunction 'void DualsenseGamepadDevice::timestamp()':
-lib/ESP32-BLE-CompositeHID/DualSenseGamepadDevice.cpp:657:23: error: 'esp_cpu_get_cycle_count' was not declared in this scope
-     uint32_t cycles = esp_cpu_get_cycle_count() / 1500;
-                       ^~~~~~~~~~~~~~~~~~~~~~~
-lib/ESP32-BLE-CompositeHID/DualSenseGamepadDevice.cpp:657:23: note: suggested alternative: 'esp_cpu_get_ccount'
-     uint32_t cycles = esp_cpu_get_cycle_count() / 1500;
-                       ^~~~~~~~~~~~~~~~~~~~~~~
-                       esp_cpu_get_ccount
-*** [.pio/build/m5stack-stamps3/lib546/ESP32-BLE-CompositeHID/DualSenseGamepadDevice.cpp.o] Error 1
-```
-To resolve it, open the file by Ctrl+clicking (or Cmd+clicking on Mac) on the file `DualSenseGamepadDevice.cpp` (not `.o`!) and in line 657 change `esp_cpu_get_cycle_count()` to `esp_cpu_get_ccount()`.
-
 - *Optional: If you chose the second option, move the exported .bin file to the SD card*
 - Make sure the SD card is in, then turn on the Cardputer
 ## Step 3: First run
