@@ -39,7 +39,7 @@ It started as an idea to solve the problem of the meticulous process of logging 
 - Clone the repository
 
 ```bash
-git clone https://github.com/adamecki/PWDer
+git clone --recursive https://github.com/adamecki/PWDer
 cd PWDer
 git submodule init
 ```
