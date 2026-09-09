@@ -188,10 +188,10 @@ Otherwise, if you're writing an import file manually, you can add the secret key
 
 ### Where do I find the TOTP in PWDer's UI?
 <img src="./assets/photos/preview.bmp" alt="TOTP is here" width="480px">
-If the NTP requirements are met and your entry has a TOTP secret set, the entry title will be blue. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
+If the NTP requirements are met and your entry has a TOTP secret set, the entry title will change its colour. After that, you can hold `v` to display the one time password: it will show on the right side of your username, or press `4` to enter it to your computer.
 
 ## Lock screen
-Here you have to enter the correct password (then press OK) to access the device. If you've locked yourself out, you can remove the `pwder/config` file from the SD card (the password will be "default" again), but keep in mind that all your saved passwords and configuration will disappear!
+Here you have to enter the correct password (then press OK) to access the device. If you've locked yourself out, you can remove the `pwder.pvault` file from the SD card (the vault will regenerate and the password will be "default" again), but keep in mind that the passwords will also be lost!
 
 <img src="./assets/photos/password.bmp" alt="lock" width="480px">
 
