@@ -92,6 +92,19 @@ python sync.py C:\your\database.kdbx
 
 <b>Remember that your user should have the serial port privileges (like belonging to the `dialout` group on Linux)!</b>
 
+## Excluding entries
+Of course, not every password needs portability. The less passwords you carry with yourself, the better. Now deciding which passwords should PWDer include is easier, as there is no need to create a second database with only the required passwords.
+
+In order to prevent your KeePass password from appearing in PWDer's vault, you should add a `!pwexclude` line in the notes of the entry.
+
+<img src="./assets/photos/exclusion.png" alt="Entry excluded" width="480px">
+
+During synchronization, the script will detect and ignore entry that has been marked as excluded.
+
+<img src="./assets/photos/exclusion2.png" alt="Entry ignored" width="480px">
+
+Then, it simply won't be sent to PWDer and won't appear there.
+
 # Usage
 ## Main screen
 This is where you can select a password to enter. The top bar represents the vault usage in %, and the bottom one is a scrollbar.

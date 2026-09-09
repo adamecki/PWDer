@@ -235,11 +235,18 @@ print(bcolors.OKGREEN + "OK" + bcolors.ENDC)
 print()
 
 ### Fill vault with data
-print(bcolors.HEADER + "Reading KDBX data... " + bcolors.ENDC, end='')
+print(bcolors.HEADER + "Reading KDBX data... " + bcolors.ENDC)
 
 i = 0
+ignored = 0
 for entry in db.entries:
-    if i < 100:
+    if i < 100 + ignored:
+        if entry.notes:
+            if '!pwexclude' in entry.notes:
+                ignored += 1
+                print("Ignoring entry " + entry.title)
+                continue
+
         vault.credential_count += 1
 
         if not entry.title:
@@ -267,7 +274,7 @@ for entry in db.entries:
         break
     i += 1
 
-print(bcolors.OKGREEN + "OK" + bcolors.ENDC)
+print(bcolors.OKGREEN + f'OK. Total entry count: {vault.credential_count}.' + bcolors.ENDC)
 print()
 
 ### Encrypt vault data
